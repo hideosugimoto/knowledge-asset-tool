@@ -260,6 +260,47 @@ VERSION は `1.0`、STATUS は `DRAFT`。改訂履歴の初版エントリを自
 
 回答に応じて以下の分析を実行してください。
 
+**サブエージェント委譲ルール（モード i「全部」で適用）:**
+
+モード i) では各コマンドをサブエージェント（Agent ツール）に委譲してコンテキスト消費を抑える。
+単一モード（a〜h, j〜n）では従来通りメインセッションで直接実行する。
+
+サブエージェントに委譲する際の **必須ルール**（品質維持のため厳守）:
+
+1. **ファクトはファイルパスで渡す**: テキスト要約を渡さない。`.cache/facts-{名前}.yaml` のパスを渡し、エージェントに Read させる
+2. **コマンドファイルを Read させる**: `.claude/commands/{command}.md` のパスを渡し、全文を Read して指示に従わせる
+3. **品質ルールを Read させる**: `templates/quality-rules.md` のパスを渡し、Read させる
+4. **設定を全て明示する**: 対象パス、名前、フロントエンド情報、検収モード設定、DB分析結果パスを全てプロンプトに含める
+5. **出力はディスクに直接書く**: `--- FILE: ---` 形式ではなく、Write ツールで直接ファイルに書き出させる
+6. **ソースコードは自分で読ませる**: ファクト YAML に記載された source パスを起点に、エージェント自身がコードを Read する
+
+サブエージェントプロンプトのテンプレート:
+```
+以下のドキュメント生成タスクを実行してください。
+
+■ 準備（必ず最初に実行）
+1. `templates/quality-rules.md` を Read して品質ルールを把握する
+2. `.claude/commands/{command}.md` を Read して生成手順を把握する
+3. `.cache/facts-{名前}.yaml` を Read してファクトデータを取得する
+4. DB分析結果がある場合: `.cache/db-{DB名}.json` を Read する
+
+■ 設定
+- 対象パス: {対象パス}
+- プロジェクト名: {名前}
+- フロントエンド: {検出結果 or "未検出"}
+- 検収モード: {有効/無効}
+- 文書番号プレフィックス: {prefix}（検収モード有効時のみ）
+
+■ 実行
+`.claude/commands/{command}.md` の「実行内容」セクションに従い、
+ドキュメントを生成して Write ツールで ./docs/ 配下に直接保存してください。
+ファクト YAML の source フィールドを参照し、必要に応じてソースコードを Read して
+記述の正確性を確認してください。
+
+■ 品質チェック
+出力前に `templates/quality-rules.md` §5 のセルフレビューチェックリストを実行してください。
+```
+
 ### 出力モード a) 標準
 
 .claude/commands/analyze.md の「実行内容」セクションに従って分析・出力してください。
@@ -324,32 +365,72 @@ Marp CLI でファイル変換まで自動実行してください。
 
 ### 出力モード i) 全部
 
-以下を順番に実行してください：
-1. .claude/commands/analyze-full.md の「実行内容」に従って完全版ドキュメントを生成・保存
-2. .claude/commands/manual.md の「実行内容」に従って完全マニュアルを生成・保存
-3. .claude/commands/user-guide.md の「実行内容」に従ってエンドユーザー操作ガイドを生成・保存
-4. .claude/commands/ops-design.md の「実行内容」に従って運用設計書を生成・保存
-5. .claude/commands/quick-ref.md の「実行内容」に従ってクイックリファレンスカードを生成・保存
-6. .claude/commands/test-spec.md の「実行内容」に従ってテスト仕様書を生成・保存
-7. .claude/commands/analyze-slide.md の「実行手順」に従ってコード分析ベースのスライドを生成
-8. .claude/commands/manual-slide.md の「実行手順」に従って、生成したマニュアルからSlidedocsを生成
-9. .claude/commands/generate-ai-docs.md の「実行内容」に従って llms.txt + AGENTS.md を生成
-10. `python scripts/translate_diagrams.py --docs-dir ./docs --source-dir {対象パス} --name {名前} --in-place` を実行して .mmd ノードラベルを日本語化（翻訳ファイルがない場合はスキップ）
-11. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link` を実行して .mmd → SVG 変換 + Markdownリンク書き換え + 別ウィンドウリンク挿入
-12. .claude/commands/generate-site.md の「実行手順」に従って MkDocs 設定を生成
-13. `templates/index-template.md` を元に `./docs/{名前}-index.md` を生成（プロジェクト固有の目次）し、`./docs/index.md` にポータルリンクを追記
-14. `mkdocs build` を実行して `site/` に共有用HTML一式を生成
+サブエージェントに委譲して並列実行する。各エージェントは上記「サブエージェント委譲ルール」に従う。
 
-1回のコード分析で全ての出力を生成してください（繰り返し分析する必要はありません）。
+#### Phase 0: ファクト収集（メインセッション）
 
-**⚠️ 13, 14 は全モード共通で、成果物が1つでも生成されたら必ず実行すること。**
+ファクトキャッシュが無効または存在しない場合、メインセッションで Step 0 ファクト収集を実行し `.cache/facts-{名前}.yaml` に保存する。
+キャッシュが有効な場合はスキップ。**Phase A 開始前にファクトキャッシュが存在することを必ず確認する。**
+
+#### Phase A: 独立ドキュメント生成（並列サブエージェント）
+
+以下の 7 コマンドは互いに依存しないため、**Agent ツールで並列に起動する**。
+各エージェントにサブエージェントプロンプトテンプレートを使い、対応するコマンドファイルを指定する。
+
+| # | コマンドファイル | 生成物 |
+|---|----------------|--------|
+| A1 | analyze-full.md | architecture/, diagrams/, explanations/, decisions/ |
+| A2 | manual.md | manual/{名前}/00〜08 + features/ |
+| A3 | user-guide.md | manual/{名前}/09-user-guide.md |
+| A4 | ops-design.md | manual/{名前}/12-ops-design.md |
+| A5 | quick-ref.md | manual/{名前}/10-quick-reference.md |
+| A6 | test-spec.md | manual/{名前}/11-test-spec.md |
+| A7 | analyze-slide.md | slides/{名前}/ |
+
+**⚠️ 全 7 エージェントの完了を待ってから Phase A 検証に進む。**
+
+#### Phase A 検証（メインセッション）
+
+以下のファイルが存在することを確認する。欠落があれば該当エージェントを再起動する。
+```
+docs/architecture/{名前}.md
+docs/manual/{名前}/00-index.md
+docs/manual/{名前}/03-features.md
+docs/manual/{名前}/09-user-guide.md
+docs/manual/{名前}/10-quick-reference.md
+docs/manual/{名前}/11-test-spec.md
+docs/manual/{名前}/12-ops-design.md
+```
+
+#### Phase B: 依存ドキュメント生成（並列サブエージェント）
+
+Phase A の出力に依存するため、Phase A 検証後に起動する。
+
+| # | コマンドファイル | 依存 | 生成物 |
+|---|----------------|------|--------|
+| B1 | manual-slide.md | A2 (manual) | slides/{名前}-slidedocs/ |
+| B2 | generate-ai-docs.md | A1 + A2 | {名前}-llms.txt, {名前}-AGENTS.md |
+
+**⚠️ 全エージェントの完了を待ってから Phase C に進む。**
+
+#### Phase C: 後処理（メインセッション・逐次実行）
+
+スクリプト実行とサイト生成はメインセッションで直接行う。
+
+1. `python scripts/translate_diagrams.py --docs-dir ./docs --source-dir {対象パス} --name {名前} --in-place`（翻訳ファイルがない場合はスキップ）
+2. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link`
+3. .claude/commands/generate-site.md の「実行手順」に従って MkDocs 設定を生成
+4. `templates/index-template.md` を元に `./docs/{名前}-index.md` を生成し、`./docs/index.md` にポータルリンクを追記
+5. `mkdocs build` を実行して `site/` に共有用HTML一式を生成
+
+**⚠️ Phase C の 4, 5 は全モード共通で、成果物が1つでも生成されたら必ず実行すること。**
 
 **⚠️ 進捗表示ルール（全ステップ共通）:**
-各ステップの開始時に TaskCreate でタスクを作成し、完了時に TaskUpdate で完了にすること。
-これによりユーザーはリアルタイムで進捗を確認できる。
+各 Phase の開始時に TaskCreate でタスクを作成し、完了時に TaskUpdate で完了にすること。
 例:
-- `TaskCreate("完全版ドキュメント生成")` → 実行 → `TaskUpdate(status: completed)`
-- `TaskCreate("完全マニュアル生成")` → 実行 → `TaskUpdate(status: completed)`
+- `TaskCreate("Phase A: 7 ドキュメント並列生成")` → 全完了 → `TaskUpdate(status: completed)`
+- `TaskCreate("Phase B: スライド + AI docs 生成")` → 全完了 → `TaskUpdate(status: completed)`
+- `TaskCreate("Phase C: 後処理・サイト生成")` → 全完了 → `TaskUpdate(status: completed)`
 
 ## Step 4: ファイル保存（スライド以外）
 

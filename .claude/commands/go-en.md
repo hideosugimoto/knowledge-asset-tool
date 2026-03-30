@@ -220,6 +220,47 @@ If the cache is invalid (source changed) or missing, run fact collection normall
 
 Execute analysis according to the selected output mode.
 
+**Subagent delegation rules (applied in mode i "All"):**
+
+In mode i), each command is delegated to a subagent (Agent tool) to reduce context consumption.
+Single modes (a-h, j-n) run directly in the main session as before.
+
+Mandatory rules when delegating to subagents (strictly enforced for quality):
+
+1. **Pass facts as file path**: Do NOT pass text summaries. Pass `.cache/facts-{name}.yaml` path and have the agent Read it
+2. **Have agent Read command file**: Pass `.claude/commands/{command}.md` path for full Read
+3. **Have agent Read quality rules**: Pass `templates/quality-rules.md` path for Read
+4. **Specify all settings explicitly**: target path, name, frontend info, inspection mode, DB analysis path
+5. **Write output directly to disk**: Use Write tool, not `--- FILE: ---` format
+6. **Agent reads source code itself**: Using source paths from facts YAML
+
+Subagent prompt template:
+```
+Execute the following document generation task.
+
+■ Preparation (must execute first)
+1. Read `templates/quality-rules.md` for quality rules
+2. Read `.claude/commands/{command}.md` for generation instructions
+3. Read `.cache/facts-{name}.yaml` for fact data
+4. If DB analysis exists: Read `.cache/db-{db_name}.json`
+
+■ Settings
+- Target path: {target_path}
+- Project name: {name}
+- Frontend: {detection result or "not detected"}
+- Inspection mode: {enabled/disabled}
+- Document ID prefix: {prefix} (only when inspection mode enabled)
+
+■ Execution
+Follow the "Execution" section of `.claude/commands/{command}.md`.
+Generate documents and save directly to ./docs/ using the Write tool.
+Refer to source paths in the facts YAML and Read source code as needed
+to verify accuracy.
+
+■ Quality check
+Run the self-review checklist from `templates/quality-rules.md` §5 before output.
+```
+
 ### Output mode a) Standard
 
 Follow the "Execution" section of .claude/commands/analyze.md.
@@ -273,28 +314,72 @@ Follow the "Execution" section of .claude/commands/quick-ref.md.
 
 ### Output mode i) All
 
-Execute in order:
-1. .claude/commands/analyze-full.md -- Full documentation
-2. .claude/commands/manual.md -- Complete manual
-3. .claude/commands/user-guide.md -- End-user operations guide
-4. .claude/commands/quick-ref.md -- Quick reference card
-5. .claude/commands/analyze-slide.md -- Code-analysis-based slides
-6. .claude/commands/manual-slide.md -- Manual-based Slidedocs
-7. .claude/commands/generate-ai-docs.md -- llms.txt + AGENTS.md
-8. `python scripts/translate_diagrams.py --docs-dir ./docs --source-dir {target_path} --name {name} --in-place` -- Translate .mmd node labels (skip if no translation file)
-9. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link` -- .mmd to SVG + Markdown link rewrite
-10. .claude/commands/generate-site.md -- MkDocs configuration
-11. Generate `./docs/{name}-index.md` from `templates/index-template-en.md` and add a portal link to `./docs/index.md`
-12. `mkdocs build` -- Build site/ for sharing
+Delegate to subagents for parallel execution. Each agent follows the "Subagent delegation rules" above.
 
-Complete all outputs from a single code analysis pass (no need to re-analyze).
+#### Phase 0: Fact Collection (main session)
 
-**Steps 11 and 12 are common to all modes and must always run when any artifact is generated.**
+If fact cache is invalid or missing, run Step 0 fact collection in the main session and save to `.cache/facts-{name}.yaml`.
+Skip if cache is valid. **Ensure fact cache exists before starting Phase A.**
 
-**Progress display rule (all steps):**
-Create a task with TaskCreate at the start of each step and mark it completed with TaskUpdate when done.
+#### Phase A: Independent Document Generation (parallel subagents)
+
+The following 7 commands have no dependencies — **launch all in parallel using the Agent tool**.
+Use the subagent prompt template with the corresponding command file for each.
+
+| # | Command file | Output |
+|---|-------------|--------|
+| A1 | analyze-full.md | architecture/, diagrams/, explanations/, decisions/ |
+| A2 | manual.md | manual/{name}/00-08 + features/ |
+| A3 | user-guide.md | manual/{name}/09-user-guide.md |
+| A4 | ops-design.md | manual/{name}/12-ops-design.md |
+| A5 | quick-ref.md | manual/{name}/10-quick-reference.md |
+| A6 | test-spec.md | manual/{name}/11-test-spec.md |
+| A7 | analyze-slide.md | slides/{name}/ |
+
+**Wait for all 7 agents to complete before proceeding to Phase A verification.**
+
+#### Phase A Verification (main session)
+
+Verify these files exist. Re-launch the agent for any missing file.
+```
+docs/architecture/{name}.md
+docs/manual/{name}/00-index.md
+docs/manual/{name}/03-features.md
+docs/manual/{name}/09-user-guide.md
+docs/manual/{name}/10-quick-reference.md
+docs/manual/{name}/11-test-spec.md
+docs/manual/{name}/12-ops-design.md
+```
+
+#### Phase B: Dependent Document Generation (parallel subagents)
+
+These depend on Phase A output. Launch after Phase A verification.
+
+| # | Command file | Depends on | Output |
+|---|-------------|-----------|--------|
+| B1 | manual-slide.md | A2 (manual) | slides/{name}-slidedocs/ |
+| B2 | generate-ai-docs.md | A1 + A2 | {name}-llms.txt, {name}-AGENTS.md |
+
+**Wait for all agents to complete before proceeding to Phase C.**
+
+#### Phase C: Post-processing (main session, sequential)
+
+Run scripts and site generation directly in the main session.
+
+1. `python scripts/translate_diagrams.py --docs-dir ./docs --source-dir {target_path} --name {name} --in-place` (skip if no translation file)
+2. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link`
+3. Follow .claude/commands/generate-site.md to generate MkDocs config
+4. Generate `./docs/{name}-index.md` from `templates/index-template-en.md` and add portal link to `./docs/index.md`
+5. `mkdocs build` -- Build site/ for sharing
+
+**Steps 4 and 5 are common to all modes and must always run when any artifact is generated.**
+
+**Progress display rule (all phases):**
+Create a task with TaskCreate at the start of each phase and mark completed with TaskUpdate.
 Example:
-- `TaskCreate("Full documentation generation")` -> execute -> `TaskUpdate(status: completed)`
+- `TaskCreate("Phase A: 7 documents parallel generation")` -> all done -> `TaskUpdate(status: completed)`
+- `TaskCreate("Phase B: slides + AI docs generation")` -> all done -> `TaskUpdate(status: completed)`
+- `TaskCreate("Phase C: post-processing & site build")` -> all done -> `TaskUpdate(status: completed)`
 - `TaskCreate("Complete manual generation")` -> execute -> `TaskUpdate(status: completed)`
 
 ## Step 4: Save Files (except slides)
