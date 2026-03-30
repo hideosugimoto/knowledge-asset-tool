@@ -88,6 +88,67 @@ def update_markdown_links(md_path, mmd_to_svg_map, dry_run, add_external_link=Fa
     return False
 
 
+def extract_inline_mermaid(docs_dir, diagrams_dir):
+    """Markdown 内のインライン Mermaid ブロックを .mmd ファイルとして抽出する。
+
+    02-screen-flow.md 等に含まれるインライン stateDiagram / graph / flowchart を
+    diagrams/ ディレクトリに .mmd ファイルとして書き出す。
+    既に同名の .mmd ファイルが存在する場合はスキップする。
+    """
+    md_files = sorted(glob.glob(os.path.join(docs_dir, "**", "*.md"), recursive=True))
+    mermaid_block = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL)
+    extracted = 0
+
+    for md_path in md_files:
+        rel_path = os.path.relpath(md_path, docs_dir)
+        # manual/{name}/02-screen-flow.md → {name}-screen-flow
+        parts = rel_path.replace("\\", "/").split("/")
+        if len(parts) < 2:
+            continue
+
+        with open(md_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        blocks = mermaid_block.findall(content)
+        if not blocks:
+            continue
+
+        # ファイル名の推定: manual/{name}/02-screen-flow.md → {name}-screen-flow
+        # architecture/{name}.md → {name}-architecture
+        if parts[0] == "manual" and len(parts) >= 3:
+            project_name = parts[1]
+            file_stem = os.path.splitext(parts[-1])[0]
+            # 先頭の番号を除去 (02-screen-flow → screen-flow)
+            file_stem = re.sub(r"^\d+-", "", file_stem)
+        elif parts[0] == "architecture":
+            project_name = os.path.splitext(parts[-1])[0]
+            file_stem = "architecture"
+        else:
+            continue
+
+        for i, block in enumerate(blocks):
+            # stateDiagram, graph, flowchart, sequenceDiagram 等のメイン図のみ
+            first_line = block.strip().split("\n")[0].strip()
+            if not any(first_line.startswith(kw) for kw in
+                       ("stateDiagram", "graph", "flowchart", "sequenceDiagram",
+                        "erDiagram", "C4Context", "C4Container", "C4Component")):
+                continue
+
+            suffix = f"-{i}" if i > 0 else ""
+            mmd_name = f"{project_name}-{file_stem}{suffix}.mmd"
+            mmd_path_out = os.path.join(diagrams_dir, mmd_name)
+
+            if os.path.exists(mmd_path_out):
+                continue
+
+            with open(mmd_path_out, "w", encoding="utf-8") as f:
+                f.write(block)
+            extracted += 1
+            print(f"  [EXTRACT] {rel_path} -> diagrams/{mmd_name}")
+
+    return extracted
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=".mmd ファイルを SVG に変換し、Markdown リンクを書き換える"
@@ -112,6 +173,13 @@ def main():
         sys.exit(1)
 
     mmdc_path = find_mmdc()
+
+    # 0. インライン Mermaid を .mmd ファイルとして抽出
+    print("[INFO] インライン Mermaid の抽出...")
+    extracted = extract_inline_mermaid(docs_dir, diagrams_dir)
+    if extracted > 0:
+        print(f"[INFO] {extracted} ブロックを .mmd ファイルとして抽出しました")
+    print("")
 
     # 1. .mmd ファイルを収集
     mmd_files = sorted(glob.glob(os.path.join(diagrams_dir, "*.mmd")))

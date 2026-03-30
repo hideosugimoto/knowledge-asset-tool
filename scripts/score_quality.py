@@ -166,23 +166,43 @@ def _score_factual_grounding(docs_dir: Path, name: str) -> AxisResult:
         B: 50-79% of sections contain citations
         C: <50% of sections contain citations
     """
+    # マニュアル + アーキテクチャの両方を評価対象にする
+    scan_dirs = []
     manual_dir = docs_dir / "manual" / name
-    if not manual_dir.is_dir():
+    if manual_dir.is_dir():
+        scan_dirs.append(manual_dir)
+    arch_dir = docs_dir / "architecture"
+    if arch_dir.is_dir():
+        scan_dirs.append(arch_dir)
+    if not scan_dirs:
         return AxisResult(
             name="ファクト根拠",
             grade="C",
-            detail="マニュアルディレクトリが見つからない",
-            suggestions=[f"docs/manual/{name}/ にマニュアルを生成してください"],
+            detail="マニュアル・アーキテクチャディレクトリが見つからない",
+            suggestions=[f"docs/manual/{name}/ または docs/architecture/ にドキュメントを生成してください"],
         )
 
-    citation_pattern = re.compile(r"\([^)]*:\d+\)")
+    citation_pattern = re.compile(
+        r"\([^)]*:\d+\)"           # (file:line) 形式
+        r"|<!-- source: [^>]+-->"  # <!-- source: file:line --> 形式
+    )
     section_pattern = re.compile(r"^#{1,3}\s+", re.MULTILINE)
 
     total_sections = 0
     sections_with_citations = 0
     low_citation_files: list[str] = []
 
-    for md_file in sorted(manual_dir.glob("*.md")):
+    all_md_files = []
+    for d in scan_dirs:
+        all_md_files.extend(d.rglob("*.md"))
+    # architecture はプロジェクト名に完全一致するファイルのみ（例: my-app.md, my-app.rag.md）
+    all_md_files = [
+        f for f in all_md_files
+        if f.parent.name != "architecture"
+        or f.stem == name
+        or f.stem == f"{name}.rag"
+    ]
+    for md_file in sorted(all_md_files):
         text = _read_text(md_file)
         sections = section_pattern.split(text)
         if len(sections) <= 1:
