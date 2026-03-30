@@ -1,0 +1,18 @@
+# 資産ファイルは絶対にコミットしない
+docs/
+# ただしツール本体のスタイルシートは許可
+!docs/stylesheets/
+
+# 分析キャッシュ（DB接続情報を含む可能性あり）
+.cache/
+
+# 一時ファイル
+/tmp/
+*.tmp
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.pytest_cache/
+site/
+.coverage

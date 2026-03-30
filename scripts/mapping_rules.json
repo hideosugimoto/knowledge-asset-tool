@@ -1,0 +1,30 @@
+[
+    {
+        "source_pattern": "Controllers/API/*Controller.php",
+        "docs": ["features/*.md", "04-api-reference.md"]
+    },
+    {
+        "source_pattern": "Models/*.php",
+        "docs": ["05-data-model.md"]
+    },
+    {
+        "source_pattern": "pages/**/*.vue",
+        "docs": ["06-screen-specs.md", "02-screen-flow.md"]
+    },
+    {
+        "source_pattern": "store/*.js",
+        "docs": ["features/*.md"]
+    },
+    {
+        "source_pattern": "routes/api.php",
+        "docs": ["04-api-reference.md", "02-screen-flow.md"]
+    },
+    {
+        "source_pattern": "config/*",
+        "docs": ["01-overview.md"]
+    },
+    {
+        "source_pattern": "*.json",
+        "docs": ["01-overview.md"]
+    }
+]

@@ -1,0 +1,158 @@
+# ファクト収集スキーマ定義
+# 各 analyze/manual コマンドの Step 0 で収集する構造化データのスキーマ。
+# コマンドごとに必要なカテゴリのみを使用する。
+#
+# 全エントリに source (ファイル:行番号) を必須とする。
+# コードで確認できない項目は confirmed: false を付与する。
+
+facts:
+  routes:
+    # ルーティング定義から抽出
+    - method: GET|POST|PUT|PATCH|DELETE
+      path: "/api/..."
+      controller: "FooController@method"
+      middleware: [auth, ...]
+      source: "routes/api.php:45"
+
+  controllers:
+    # コントローラー / ハンドラー
+    - name: "FooController"
+      file: "app/Http/Controllers/FooController.php"
+      methods: [index, store, update, destroy]
+      source: "app/Http/Controllers/FooController.php:1"
+
+  models:
+    # ORM モデル / エンティティ
+    - name: "User"
+      table: "users"
+      file: "app/Models/User.php"
+      relations: [{type: hasMany, target: Order}]
+      source: "app/Models/User.php:1"
+
+  tables:
+    # DB テーブル（マイグレーション or DB分析結果から）
+    - name: "users"
+      type: master|transaction|relation|system
+      columns: [{name: id, type: bigint}, ...]
+      source: "database/migrations/2024_01_create_users.php:15"
+
+  screens:
+    # 画面 / ページコンポーネント
+    - name: "ダッシュボード"
+      path: "/dashboard"
+      component: "pages/dashboard.vue"
+      auth_required: true
+      elements:
+        buttons: ["新規登録", "検索"]
+        forms: [{name: "検索フォーム", fields: [...]}]
+        tables: [{name: "一覧", columns: [...]}]
+      source: "pages/dashboard.vue:1"
+
+  stores:
+    # 状態管理（Vuex / Pinia / Redux 等）
+    - name: "useUserStore"
+      file: "stores/user.ts"
+      state_keys: [users, loading]
+      actions: [fetchUsers, updateUser]
+      source: "stores/user.ts:1"
+
+  middleware:
+    # ミドルウェア / ガード
+    - name: "auth"
+      file: "app/Http/Middleware/Authenticate.php"
+      source: "app/Http/Middleware/Authenticate.php:1"
+
+  services:
+    # サービス層 / ビジネスロジック
+    - name: "BillingService"
+      file: "app/Services/BillingService.php"
+      methods: [calculate, invoice]
+      source: "app/Services/BillingService.php:1"
+
+  modules:
+    # モジュール / 機能単位（quality-rules.md §4a に従い active を判定）
+    - name: "Contacts"
+      active: true                    # true / false / unknown
+      active_source: "vtiger_tab.presence=0"  # 判定根拠
+      file: "modules/Contacts/"
+      source: "modules/Contacts/Contacts.php:1"
+
+  disabled_modules:
+    # active: false のモジュール一覧（§11 技術的負債に記載）
+    - name: "ModComments"
+      reason: "vtiger_tab.presence=1（実行時に無効化済み）"
+      source: "vtiger_tab:row42"
+
+  external_deps:
+    # 外部依存（DB, キャッシュ, API等）
+    - name: "mysql"
+      version: "8.0"
+      source: "docker-compose.yml:12"
+
+# Step 0 で追加収集する中間データ（analyze, analyze-full, manual）
+system_profile:
+  scale: small|medium|large        # 画面数・テーブル数・API数から判定
+  domain: "業務系|EC系|管理系|API特化"
+  complexity: simple|moderate|complex
+  indicators:
+    files: 0
+    screens: 0
+    tables: 0
+    api_endpoints: 0
+
+business_context:
+  purpose: "(1-2文でシステムの存在理由)"
+  domain: "(業務ドメイン)"
+  users:
+    - role: "(ユーザー種別)"
+      needs: "(求めるもの)"
+      source: "(推測根拠)"
+  business_value: "(ビジネス上の価値)"
+  confidence: low|medium|high
+  sources_used: ["README.md", ...]
+
+selected_frameworks:
+  # templates/thinking-frameworks.md のセクション3から自動選択
+  - name: "MECE"
+    purpose: "機能分類の網羅性検証"
+  - name: "So What? / Why So?"
+    purpose: "論理的深みの担保"
+
+# Step 0b: ストーリーライン設計の出力
+storyline:
+  main_message: "(ドキュメント全体の結論)"
+  sub_messages:
+    - section: "(セクション名)"
+      message: "(このセクションの結論)"
+  emphasis: ["(特に強調すべきポイント)"]
+
+# Step 0c: 重要度マッピングの出力（analyze, analyze-full, manual, slide, share）
+priority_map:
+  tier1:
+    - feature: "(機能名)"
+      reason: "(コア判定の理由)"
+  tier2:
+    - feature: "(機能名)"
+      reason: "(重要判定の理由)"
+  tier3:
+    - feature: "(機能名)"
+      reason: "(補助判定の理由)"
+  disabled:
+    # active: false のモジュール（Tier分類対象外、§11 技術的負債に記載）
+    - feature: "(無効モジュール名)"
+      reason: "(無効化の根拠)"
+  distribution:
+    tier1_pct: 0
+    tier2_pct: 0
+    tier3_pct: 0
+
+# コマンド別の必要カテゴリ
+command_requirements:
+  analyze:        [routes, controllers, models, tables, screens, middleware, services, modules, disabled_modules, external_deps]
+  analyze-full:   [routes, controllers, models, tables, screens, stores, middleware, services, modules, disabled_modules, external_deps]
+  manual:         [routes, controllers, models, tables, screens, stores, middleware, services, modules, disabled_modules, external_deps]
+  analyze-slide:  [routes, controllers, models, tables, screens, modules, disabled_modules]
+  analyze-share:  [routes, controllers, models, screens, modules, disabled_modules]
+  analyze-rag:    [routes, controllers, models, tables, services, modules, disabled_modules]
+  user-guide:     [screens, routes, modules]
+  quick-ref:      [screens, routes, middleware, modules]

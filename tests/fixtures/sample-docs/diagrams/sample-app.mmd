@@ -1,0 +1,5 @@
+flowchart LR
+    Client --> AuthMiddleware
+    AuthMiddleware --> Router
+    Router --> UserModel
+    UserModel --> Database

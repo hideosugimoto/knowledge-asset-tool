@@ -1,0 +1,13 @@
+{
+  "name": "sample-express-app",
+  "version": "1.0.0",
+  "description": "A minimal Express.js sample project for E2E testing",
+  "main": "app.js",
+  "dependencies": {
+    "express": "^4.18.0",
+    "ejs": "^3.1.0"
+  },
+  "scripts": {
+    "start": "node app.js"
+  }
+}

@@ -1,0 +1,11 @@
+# knowledge-asset-tool 依存パッケージ
+#
+# 必須:
+pyyaml>=6.0
+
+# MkDocs サイト生成:
+mkdocs-material>=9.0
+
+# オプション（特定機能で使用）:
+# playwright        — capture_screenshots.py（スクリーンショット撮影）
+# pandoc            — merge_pdf.py（PDF結合）※ システムパッケージ

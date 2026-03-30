@@ -1,0 +1,15 @@
+id: ""
+version: "1.0.0"
+last_updated: ""
+confidence: medium        # low / medium / high
+
+components: []
+flow: []
+dependencies: []
+decisions: []
+keywords: []
+
+extensions:
+  claude_memory_kit: null   # v2で統合予定
+  mcp_tool: null            # v2でMCPツール定義に変換予定
+  local_rag: null           # v2でローカルRAG検索に統合予定

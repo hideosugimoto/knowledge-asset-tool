@@ -1,0 +1,39 @@
+# knowledge-asset-tool — Cursor Rules
+
+## SECURITY (HIGHEST PRIORITY)
+
+NEVER push docs/ or site/ to public repositories.
+Generated documentation contains sensitive information (DB schemas, API specs, business logic).
+
+FORBIDDEN:
+- git add -f docs/
+- git add -f site/
+- Removing docs/ or site/ from .gitignore
+- git push --no-verify
+
+To push docs: python scripts/push_docs.py (blocks public repos automatically)
+
+## Project Overview
+
+Tool to auto-generate knowledge assets from codebases.
+Scripts in scripts/, templates in templates/, generated output in docs/ (gitignored).
+
+## Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/go` | **Recommended.** Interactive wizard — generates all assets automatically |
+| `/project:analyze` | Code analysis (standard: structure, details, review) |
+| `/project:analyze-full` | Code analysis (full: arc42, explanations, RAG, MADR) |
+| `/project:analyze-rag` | RAG document + YAML metadata only |
+| `/project:analyze-share` | Audience-specific explanations + narrative |
+| `/project:analyze-slide` | Slide deck (engineer/sales/beginner, HTML/PDF/PPTX) |
+| `/project:manual` | Complete manual (all screens, features, APIs, OpenAPI) |
+| `/project:manual-slide` | Manual-based Slidedocs generation |
+| `/project:user-guide` | End-user operations guide (no technical jargon) |
+| `/project:quick-ref` | A4 one-page quick reference card |
+| `/project:generate-ai-docs` | AI documents (llms.txt + AGENTS.md) |
+| `/project:generate-site` | MkDocs Material searchable website |
+| `/project:customize` | Customize templates and settings |
+
+`/go` delegates to the above commands internally. Individual commands are for expert use.

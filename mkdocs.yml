@@ -1,0 +1,56 @@
+site_name: "knowledge-asset-tool Documentation"
+site_description: "knowledge-asset-tool で自動生成されたドキュメントサイト"
+docs_dir: docs
+use_directory_urls: false
+theme:
+  name: material
+  language: ja
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: ダークモードに切替
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: ライトモードに切替
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.tabs.link
+    - toc.follow
+
+extra_css:
+  - stylesheets/extra.css
+
+
+
+plugins:
+  - search:
+      lang: ja
+      separator: '[\s\-\.]+'
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - "Home": index.md
+  # nav セクションは generate_nav.py で自動生成される
+  # 手動で追記しないこと（分析対象の情報が含まれるため）

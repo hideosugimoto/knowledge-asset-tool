@@ -1,0 +1,157 @@
+# docs-leak-guard.yml
+# Public リポジトリに docs/ や site/ がプッシュされた場合:
+#   1. 自動コミットで即座に削除する
+#   2. Issue を作成してユーザーに通知する
+#
+# Private リポジトリではジョブ自体がスキップされる（コスト・遅延ゼロ）。
+# テンプレートから作成されたリポジトリに自動適用される。
+
+name: "Docs Leak Guard"
+
+on:
+  push:
+    branches: ["**"]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  remove-leaked-docs:
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.repository.private }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for docs/ or site/ in repository
+        id: check
+        run: |
+          FOUND=""
+          if [ -d "docs" ] && [ "$(ls -A docs/ 2>/dev/null | grep -v stylesheets | head -1)" ]; then
+            FOUND="docs"
+          fi
+          if [ -d "site" ] && [ "$(ls -A site/ 2>/dev/null | head -1)" ]; then
+            FOUND="${FOUND:+$FOUND }site"
+          fi
+          echo "found=${FOUND}" >> "$GITHUB_OUTPUT"
+          if [ -n "$FOUND" ]; then
+            echo "⛔ 機密ドキュメントを検出: ${FOUND}"
+          else
+            echo "✅ 機密ドキュメントなし"
+          fi
+
+      - name: Auto-remove leaked docs
+        if: steps.check.outputs.found != ''
+        run: |
+          git config user.name "docs-leak-guard[bot]"
+          git config user.email "docs-leak-guard[bot]@users.noreply.github.com"
+
+          REMOVED=""
+
+          # docs/ 内のファイルを削除（stylesheets/ は除外）
+          if echo "${{ steps.check.outputs.found }}" | grep -q "docs"; then
+            # git tracked な docs/ ファイルを削除（stylesheets/ は残す）
+            git ls-files docs/ | grep -v '^docs/stylesheets/' | xargs -r git rm -f --quiet
+            REMOVED="docs/"
+          fi
+
+          # site/ を削除
+          if echo "${{ steps.check.outputs.found }}" | grep -q "site"; then
+            git rm -rf --quiet site/ 2>/dev/null || true
+            REMOVED="${REMOVED:+$REMOVED, }site/"
+          fi
+
+          # .gitignore に docs/ がなければ追加
+          if ! grep -q "^docs/" .gitignore 2>/dev/null; then
+            echo "" >> .gitignore
+            echo "# 生成ドキュメント（機密情報を含む可能性あり）" >> .gitignore
+            echo "docs/" >> .gitignore
+            echo "site/" >> .gitignore
+            git add .gitignore
+            REMOVED="${REMOVED:+$REMOVED, }.gitignore updated"
+          fi
+
+          if git diff --cached --quiet; then
+            echo "削除対象なし"
+            exit 0
+          fi
+
+          git commit -m "🔒 security: auto-remove leaked docs from public repository
+
+          Removed: ${REMOVED}
+
+          This commit was automatically created by docs-leak-guard.
+          Generated documentation may contain sensitive information
+          (DB schema, API specs, business logic) and must not be
+          exposed in public repositories.
+
+          To publish docs, change the repository to Private first:
+            Settings → Danger Zone → Change visibility → Private"
+
+          git push
+
+      - name: Create security issue
+        if: steps.check.outputs.found != ''
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const title = '🔒 機密ドキュメントが Public リポジトリにプッシュされました';
+
+            // 同じタイトルの open issue があれば作成しない
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security'
+            });
+            if (existing.data.some(i => i.title === title)) {
+              console.log('既存の issue があるためスキップ');
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              labels: ['security'],
+              body: `## ⛔ 情報漏洩リスクが検出されました
+
+            **プッシュ者:** @${context.actor}
+            **ブランチ:** \`${context.ref.replace('refs/heads/', '')}\`
+            **検出内容:** \`${{ steps.check.outputs.found }}\`
+
+            ### 何が起きたか
+
+            生成ドキュメント（\`docs/\` または \`site/\`）が Public リポジトリにプッシュされました。
+            **自動削除コミットで即座に除去しました。**
+
+            ### 含まれていた可能性のある機密情報
+
+            - データベース構造（テーブル名、カラム名、ER図）
+            - API仕様（全エンドポイント、認証方式、OpenAPI定義）
+            - ビジネスロジック（計算式、承認ワークフロー）
+            - 社内システムの画面設計・操作手順
+            - DB突合レポート（本番データの統計情報）
+
+            ### 対処が必要な作業
+
+            - [ ] git の履歴にも残っている可能性があります。完全に消すには:
+              \`\`\`bash
+              git filter-branch --force --tree-filter 'rm -rf docs/ site/' HEAD
+              git push --force
+              \`\`\`
+              または [BFG Repo-Cleaner](https://rtyley.github.io/bfg-repo-cleaner/) を使用
+            - [ ] リポジトリを Private に変更することを検討してください:
+              **Settings → General → Danger Zone → Change visibility → Private**
+
+            ### 今後の防止策
+
+            \`.gitignore\` に \`docs/\` が含まれていることを確認してください。
+            \`git add -f docs/\` で強制追加しない限り、通常の操作では混入しません。
+
+            ---
+            *このIssueは [docs-leak-guard](/.github/workflows/docs-leak-guard.yml) により自動作成されました。*`
+            });

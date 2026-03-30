@@ -1,0 +1,43 @@
+/* ========================================
+   コンテンツ幅をウインドウ全幅に拡張
+   ======================================== */
+
+/* Material のコンテンツ最大幅制限を解除 */
+.md-grid {
+  max-width: 100%;
+}
+
+/* ========================================
+   サイドバー調整
+   ======================================== */
+
+/* 左サイドバーの高さ制限を解除し、独立スクロールを確保 */
+.md-sidebar--primary .md-sidebar__scrollwrap {
+  max-height: calc(100vh - 4.8rem);
+  overflow-y: auto;
+}
+
+/* ナビゲーション項目の余白を詰めてコンパクトに */
+.md-nav__item {
+  padding: 0;
+}
+
+.md-nav__link {
+  padding-top: 0.3rem;
+  padding-bottom: 0.3rem;
+  font-size: 0.72rem;
+}
+
+/* サイドバー下部にパディングを追加して最後の項目が見切れないようにする */
+.md-sidebar--primary .md-nav--primary > .md-nav__list {
+  padding-bottom: 3rem;
+}
+
+/* ========================================
+   検索ハイライトの視認性向上
+   ======================================== */
+
+.md-search-result mark {
+  background-color: #ffeb3b;
+  padding: 0 2px;
+}

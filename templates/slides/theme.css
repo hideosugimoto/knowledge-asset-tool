@@ -1,0 +1,152 @@
+/* knowledge-asset-tool slide theme */
+
+section {
+  font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-size: 26px;
+  padding: 50px 60px;
+  color: #222222;
+}
+
+h1 {
+  color: #1E2761;
+  font-size: 40px;
+  border-bottom: 3px solid #1E2761;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  color: #1E2761;
+  font-size: 30px;
+  margin-bottom: 16px;
+}
+
+/* タイトルスライド */
+section.title {
+  background: #1E2761;
+  color: #ffffff;
+  justify-content: center;
+  text-align: center;
+}
+
+section.title h1 {
+  color: #ffffff;
+  border-bottom: 2px solid rgba(255,255,255,0.4);
+  font-size: 48px;
+}
+
+section.title h2 {
+  color: rgba(255,255,255,0.8);
+  font-weight: normal;
+  font-size: 26px;
+}
+
+/* コードブロック */
+code {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 22px;
+  color: #1E2761;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #1E2761;
+  font-size: 18px;
+}
+
+/* テーブル */
+table {
+  width: 100%;
+  font-size: 20px;
+  border-collapse: collapse;
+}
+
+th {
+  background: #1E2761;
+  color: white;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+tr:nth-child(even) td {
+  background: #f8f9ff;
+}
+
+/* 2カラムレイアウト */
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-top: 10px;
+}
+
+/* カード */
+.card {
+  background: #f8f9ff;
+  border-left: 4px solid #1E2761;
+  padding: 14px 18px;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 10px;
+  font-size: 22px;
+}
+
+.card strong {
+  color: #1E2761;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* リスト */
+ul {
+  padding-left: 24px;
+}
+
+li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+/* 図の表示 — スライド内に必ず収まるよう高さを制限 */
+img {
+  max-width: 100%;
+  max-height: 55%;
+  display: block;
+  margin: 5px auto;
+  object-fit: contain;
+}
+
+/* 図 + 説明の2カラム — overflow を防止 */
+.fig-text {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-top: 5px;
+  max-height: 80%;
+  overflow: hidden;
+}
+
+.fig-text img {
+  max-height: 420px;
+}
+
+/* セクション区切りスライド */
+section.section-divider {
+  background: #f0f2ff;
+  justify-content: center;
+  text-align: center;
+}
+
+section.section-divider h1 {
+  border-bottom: none;
+  font-size: 44px;
+}

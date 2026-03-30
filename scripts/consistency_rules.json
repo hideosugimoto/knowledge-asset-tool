@@ -1,0 +1,6 @@
+[
+    {"wrong": "Seting", "correct": "Setting", "context": "typo"},
+    {"wrong": "recieve", "correct": "receive", "context": "typo"},
+    {"wrong": "occured", "correct": "occurred", "context": "typo"},
+    {"wrong": "caculate", "correct": "calculate", "context": "typo"}
+]

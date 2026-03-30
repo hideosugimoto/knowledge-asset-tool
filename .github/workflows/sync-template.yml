@@ -1,0 +1,34 @@
+name: Sync from template
+
+on:
+  schedule:
+    - cron: "0 9 * * MON"   # 毎週月曜9時に自動チェック
+  workflow_dispatch:          # 手動実行も可能
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync from template repository
+        uses: kota65535/github-template-sync-action@483070d3fc41149e2418551e3d9aba2a08273575 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          source_repo_path: hideosugimoto/knowledge-asset-tool
+          # docs/ は絶対に上書きしない（自分の資産を保護）
+          ignore: |
+            docs/**
+            .gitignore
+          pr_title: "[ツール更新] knowledge-asset-tool に更新があります"
+          pr_body: |
+            knowledge-asset-tool の元リポジトリに更新がありました。
+            内容を確認してマージするか判断してください。
+
+            **docs/ は変更されません**（自分の資産は安全です）
