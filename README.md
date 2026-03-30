@@ -45,7 +45,22 @@ git clone https://github.com/{あなたのユーザー名}/my-knowledge-assets.g
 cd my-knowledge-assets
 ```
 
-### Step 3: 依存ツールのインストール
+### Step 3: セキュリティフックの有効化（必須）
+
+```bash
+git config core.hooksPath .githooks
+```
+
+これにより `git push` 時に以下が自動実行されます:
+- docs/ の Public リポジトリへの混入ブロック
+- **情報漏洩スキャン** — 分析対象プロジェクトのデータ（DB構造、API仕様、ビジネスロジック等）がテンプレート・スクリプトに混入していないか自動チェック
+
+手動でスキャンする場合:
+```bash
+python3 scripts/check_leakage.py
+```
+
+### Step 4: 依存ツールのインストール
 
 ```bash
 npm install -g @marp-team/marp-cli
@@ -53,7 +68,7 @@ npm install -g @mermaid-js/mermaid-cli
 pip install pyyaml
 ```
 
-### Step 4: Claude Code を起動して実行
+### Step 5: Claude Code を起動して実行
 
 ```bash
 claude

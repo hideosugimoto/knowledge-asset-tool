@@ -34,6 +34,25 @@ python scripts/push_docs.py
 
 直接 `git add -f docs/` を実行しないこと。必ず `push_docs.py` 経由で操作する。
 
+### 🔍 プッシュ前の情報漏洩スキャン（必須）
+
+**`git push` の前に必ず `python3 scripts/check_leakage.py` を実行すること。**
+pre-push hook が自動実行するが、AI が `git push` する際も事前に手動実行して結果を確認する。
+
+```bash
+# プッシュ前に必ず実行
+python3 scripts/check_leakage.py
+
+# CRITICAL または HIGH が検出された場合はプッシュ禁止
+# 該当箇所を汎用的な例（my-app, user@example.com 等）に差し替えてから再コミット
+```
+
+スキャン対象:
+- 分析対象プロジェクト名（.cache/ と docs/ から自動検出）
+- mkdocs.yml の nav 構造
+- DB テーブル名（vtiger_*, wp_* 等）
+- 実プロジェクト固有の URL パス・フィールド名
+
 ### .gitignore の変更禁止
 
 `.gitignore` の以下の行を削除・変更してはならない:

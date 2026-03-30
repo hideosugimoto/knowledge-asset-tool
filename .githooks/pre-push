@@ -102,5 +102,25 @@ while IFS=' ' read -r _local_ref local_sha _remote_ref remote_sha; do
   fi
 done
 
+# 4. 情報漏洩スキャン（分析対象プロジェクトのデータ混入チェック）
+LEAKAGE_SCRIPT="${REPO_ROOT}/scripts/check_leakage.py"
+if [ -f "$LEAKAGE_SCRIPT" ] && command -v python3 &>/dev/null; then
+  printf "%s\n" "🔍 情報漏洩スキャンを実行中..."
+  if ! python3 "$LEAKAGE_SCRIPT"; then
+    printf "\n"
+    printf "%s%s%s\n" "$RED" "⛔ 情報漏洩が検出されました！プッシュをブロックします。" "$NC"
+    printf "%s\n" ""
+    printf "%s\n" "対処方法："
+    printf "%s\n" "  1. python3 scripts/check_leakage.py で詳細を確認"
+    printf "%s\n" "  2. 該当箇所を汎用的な例に差し替え"
+    printf "%s\n" "  3. 再コミット後にプッシュ"
+    printf "\n"
+    exit 1
+  fi
+else
+  printf "%s%s%s\n" "$YELLOW" "⚠️  check_leakage.py が見つからない、または python3 が未インストールです。" "$NC"
+  printf "%s\n" "   漏洩スキャンをスキップします。"
+fi
+
 printf "%s%s%s\n" "$GREEN" "✅ チェック完了。プッシュを続行します。" "$NC"
 exit 0
