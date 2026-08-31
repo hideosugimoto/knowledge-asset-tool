@@ -10,6 +10,19 @@ Usage:
     python3 scripts/check_leakage.py --staged           # staged ファイルのみ
     python3 scripts/check_leakage.py --diff HEAD~1      # 直近コミットの差分
     python3 scripts/check_leakage.py --json              # JSON 出力
+
+--json 指定時、stdout には JSON オブジェクトのみを出力する（json.load でパース可能）:
+
+    {
+      "mode": "all tracked",
+      "scanned_files": 109,
+      "patterns": 16,
+      "summary": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "total": 0},
+      "blocked": false,
+      "findings": [...]
+    }
+
+人間向けのサマリ行は stderr に出す。
 """
 
 import argparse
@@ -308,30 +321,50 @@ def main(argv=None) -> int:
     # スキャン実行
     findings = scan_files(files, repo_root, patterns)
 
+    critical_count = sum(1 for f in findings if f.severity == "CRITICAL")
+    high_count = sum(1 for f in findings if f.severity == "HIGH")
+    medium_count = sum(1 for f in findings if f.severity == "MEDIUM")
+    blocked = critical_count > 0 or high_count > 0
+
+    summary_line = (
+        f"NG: CRITICAL={critical_count}, HIGH={high_count} — プッシュをブロックします"
+    )
+
     if args.json_output:
-        data = [
-            {
-                "file": f.file_path,
-                "line": f.line_number,
-                "severity": f.severity,
-                "pattern": f.pattern_name,
-                "matched": f.matched_text,
-                "description": f.description,
-            }
-            for f in findings
-        ]
-        print(json.dumps(data, ensure_ascii=False, indent=2))
+        # stdout は JSON のみ。サマリを混ぜると json.load が Extra data で失敗する。
+        payload = {
+            "mode": mode,
+            "scanned_files": len(files),
+            "patterns": len(patterns),
+            "summary": {
+                "CRITICAL": critical_count,
+                "HIGH": high_count,
+                "MEDIUM": medium_count,
+                "total": len(findings),
+            },
+            "blocked": blocked,
+            "findings": [
+                {
+                    "file": f.file_path,
+                    "line": f.line_number,
+                    "severity": f.severity,
+                    "pattern": f.pattern_name,
+                    "matched": f.matched_text,
+                    "description": f.description,
+                }
+                for f in findings
+            ],
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        if blocked:
+            print(summary_line, file=sys.stderr)
     else:
         print(f"[INFO] 漏洩チェック ({mode}): {len(files)} ファイル, {len(patterns)} パターン")
         print(format_findings(findings))
+        if blocked:
+            print(f"\n  {summary_line}")
 
-    critical_count = sum(1 for f in findings if f.severity == "CRITICAL")
-    high_count = sum(1 for f in findings if f.severity == "HIGH")
-
-    if critical_count > 0 or high_count > 0:
-        print(f"\n  NG: CRITICAL={critical_count}, HIGH={high_count} — プッシュをブロックします")
-        return 1
-    return 0
+    return 1 if blocked else 0
 
 
 if __name__ == "__main__":
