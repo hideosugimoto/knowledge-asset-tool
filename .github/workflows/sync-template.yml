@@ -1,34 +1,136 @@
+# sync-template.yml
+# テンプレート元 (hideosugimoto/knowledge-asset-tool) との差分を検出して Issue で通知する。
+#
+# 自動 PR は作らない:
+#   テンプレートから作成した派生リポジトリは元リポジトリと共通祖先を持たないため、
+#   git merge / PR ベースの自動同期は原理的に成立しない。
+#   （旧実装の kota65535/github-template-sync-action はこれが原因で
+#     "fatal: ambiguous argument ''" を出して失敗し続けていた）
+#   そのため差分の「検出と通知」だけを行い、取り込みは手動に委ねる。
+
 name: Sync from template
 
 on:
   schedule:
     - cron: "0 9 * * MON"   # 毎週月曜9時に自動チェック
-  workflow_dispatch:          # 手動実行も可能
+  workflow_dispatch:        # 手動実行も可能
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  issues: write
+
+env:
+  TEMPLATE_REPO: hideosugimoto/knowledge-asset-tool
 
 jobs:
   sync:
+    # 本リポジトリ自身では実行しない（自分から自分へ sync する意味がない）
+    if: github.repository != 'hideosugimoto/knowledge-asset-tool'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # 浅いクローンだと template 側との diff が解決できない
+          fetch-depth: 0
 
-      - name: Sync from template repository
-        uses: kota65535/github-template-sync-action@483070d3fc41149e2418551e3d9aba2a08273575 # v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          source_repo_path: hideosugimoto/knowledge-asset-tool
-          # docs/ は絶対に上書きしない（自分の資産を保護）
-          ignore: |
-            docs/**
-            .gitignore
-          pr_title: "[ツール更新] knowledge-asset-tool に更新があります"
-          pr_body: |
-            knowledge-asset-tool の元リポジトリに更新がありました。
-            内容を確認してマージするか判断してください。
+      - name: Fetch template repository
+        run: |
+          set -euo pipefail
+          git remote add template "https://github.com/${TEMPLATE_REPO}.git"
+          git fetch --no-tags --prune template main
 
-            **docs/ は変更されません**（自分の資産は安全です）
+      - name: Diff against template
+        id: diff
+        run: |
+          set -euo pipefail
+          # 比較元は checkout された ref（既定ブランチ）。
+          # 既定ブランチ名が main 以外でも動くように HEAD を使う。
+          # docs/ site/ .cache/ mkdocs.yml は各リポジトリ固有の資産なので比較対象外。
+          git diff --stat HEAD template/main -- . \
+            ':!docs' ':!site' ':!.cache' ':!mkdocs.yml' > /tmp/template-diff.txt
+
+          CHANGED=$(git diff --name-only HEAD template/main -- . \
+            ':!docs' ':!site' ':!.cache' ':!mkdocs.yml' | wc -l | tr -d ' ')
+
+          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "検出された差分ファイル数: ${CHANGED}"
+          cat /tmp/template-diff.txt
+
+      - name: Create update issue
+        if: steps.diff.outputs.changed != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "[ツール更新] knowledge-asset-tool に更新があります"
+        run: |
+          set -euo pipefail
+
+          # 同一タイトルの open issue があればスキップ（毎週増殖させない）
+          # --search はタイトルの記号でヒットしないことがあるため、
+          # open issue 一覧を取得してタイトル完全一致で判定する。
+          OPEN_TITLES=$(gh issue list --state open --limit 200 --json title --jq '.[].title')
+          if printf '%s\n' "$OPEN_TITLES" | grep -Fxq "$TITLE"; then
+            echo "既存の open issue があるためスキップします。"
+            exit 0
+          fi
+
+          {
+            echo "テンプレート元 \`${TEMPLATE_REPO}\` に **${{ steps.diff.outputs.changed }} ファイル** の差分があります。"
+            echo
+            echo "\`docs/\` \`site/\` \`.cache/\` \`mkdocs.yml\` は比較対象外です（各リポジトリ固有の資産のため）。"
+            echo
+            echo "## 差分サマリ"
+            echo
+            echo '```'
+            cat /tmp/template-diff.txt
+            echo '```'
+            echo
+            echo "## 手動での取り込み手順"
+            echo
+            echo "派生リポジトリとテンプレート元には**共通祖先が無い**ため、"
+            echo "\`git merge\` や自動 PR では同期できません。必要なファイルだけを取り込んでください。"
+            echo
+            echo '```bash'
+            echo "git remote add template https://github.com/${TEMPLATE_REPO}.git"
+            echo "git fetch template main"
+            echo
+            echo "# 差分の確認"
+            echo "git diff HEAD template/main -- . ':!docs' ':!site' ':!.cache' ':!mkdocs.yml'"
+            echo
+            echo "# 取り込みたいファイルだけを反映（例）"
+            echo "git checkout template/main -- scripts/ templates/ .claude/"
+            echo
+            echo "# 反映前に必ず漏洩スキャンを通す"
+            echo "python3 scripts/check_leakage.py"
+            echo '```'
+          } > /tmp/issue-body.md
+
+          gh issue create --title "$TITLE" --body-file /tmp/issue-body.md
+
+      - name: Report workflow failure
+        # 失敗を握り潰さない: ジョブが落ちたら Issue で気づけるようにする
+        # （旧実装は 22 週連続 failure に誰も気づけなかった）
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "[ツール更新] テンプレート同期チェックが失敗しました"
+        run: |
+          set -euo pipefail
+          # --search はタイトルの記号でヒットしないことがあるため、
+          # open issue 一覧を取得してタイトル完全一致で判定する。
+          OPEN_TITLES=$(gh issue list --state open --limit 200 --json title --jq '.[].title')
+          if printf '%s\n' "$OPEN_TITLES" | grep -Fxq "$TITLE"; then
+            echo "既存の open issue があるためスキップします。"
+            exit 0
+          fi
+          cat > /tmp/failure-body.md <<'EOF'
+          `Sync from template` ワークフローが失敗しました。
+
+          このワークフローはテンプレート元との差分を検出するだけで、
+          リポジトリの内容は変更しません。失敗しても既存の資産に影響はありませんが、
+          テンプレートの更新に気づけない状態が続きます。
+          EOF
+          echo "" >> /tmp/failure-body.md
+          echo "実行ログ: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> /tmp/failure-body.md
+
+          gh issue create --title "$TITLE" --body-file /tmp/failure-body.md
