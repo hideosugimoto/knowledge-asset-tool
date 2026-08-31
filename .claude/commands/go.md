@@ -421,7 +421,7 @@ Phase A の出力に依存するため、Phase A 検証後に起動する。
 2. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link`
 3. .claude/commands/generate-site.md の「実行手順」に従って MkDocs 設定を生成
 4. `templates/index-template.md` を元に `./docs/{名前}-index.md` を生成し、`./docs/index.md` にポータルリンクを追記
-5. `mkdocs build` を実行して `site/` に共有用HTML一式を生成
+5. `mkdocs build -f mkdocs.generated.yml` を実行して `site/` に共有用HTML一式を生成
 
 **⚠️ Phase C の 4, 5 は全モード共通で、成果物が1つでも生成されたら必ず実行すること。**
 
@@ -576,10 +576,12 @@ python3 scripts/score_quality.py --docs-dir ./docs --name {名前}
 `mkdocs` がインストール済みの場合、以下を実行してフォルダコピーで共有可能なHTMLサイトを生成：
 
 ```bash
-mkdocs build
+python3 scripts/generate_nav.py
+mkdocs build -f mkdocs.generated.yml
 ```
 
 `site/` ディレクトリに自己完結型のHTMLサイトが生成される。
+nav は `mkdocs.generated.yml`（.gitignore 対象）に生成される。`mkdocs.yml` は変更しない。
 このフォルダをそのまま共有相手に渡せば、ブラウザで `site/index.html` を開くだけで閲覧できる。
 
 `mkdocs` 未インストールの場合は `pip3 install --break-system-packages mkdocs-material` でインストールする。
@@ -668,6 +670,10 @@ python3 scripts/capture_screenshots.py --base-url {推定URL} --routes /dev/null
 2. `docs/` 外（`/tmp/` 等）を参照している画像ファイルを `docs/slides/{名前}/images/` にコピーする
 3. スライド Markdown 内のパスを相対パス `images/{filename}` に書き換える
 4. Marp で HTML/PDF/PPTX を再生成する（パス書き換え後に再変換が必須）
+   **⚠️ `docs/slides/` に残す Marp ソース Markdown は `-src.md` 接尾辞にすること。**
+   `<name>.md` と `<name>.html` が同居すると、MkDocs（`use_directory_urls: false`）が
+   .md をレンダリングして実スライド HTML を上書きする。
+   詳細は `.claude/commands/analyze-slide.md` の Step 5「出力ファイルの命名規則」を参照。
 5. `python3 scripts/check_links.py --docs-dir ./docs` でリンク切れゼロを確認する
 
 **⚠️ このステップは Step 5.5（品質チェック）より後、Step 6.8 より前に実行する。**

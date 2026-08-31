@@ -153,6 +153,23 @@ mmdc -i /tmp/{システム名}-mslide-N.mmd -o /tmp/{システム名}-mslide-N.s
 
 ### Step 6: 変換実行
 
+#### ⚠️ 出力ファイルの命名規則（必須）
+
+`mkdocs.yml` は `use_directory_urls: false` のため、MkDocs は `<name>.md` を
+`<name>.html` にレンダリングする。同じディレクトリに `<name>.md` と `<name>.html`
+が同居すると、**MkDocs が .md 由来の HTML で実スライド HTML を上書きする**。
+リンクは 404 にならず中身だけが差し替わるため気づけない。
+
+Marp ソース Markdown を `docs/slides/` に残す場合は必ず **`-src.md` 接尾辞**にすること。
+
+| 種別 | ファイル名 |
+|------|-----------|
+| スライド本体 | `docs/slides/{システム名}-manual-{対象読者}.html` / `.pdf` / `.pptx` |
+| Marp ソース | `docs/slides/{システム名}-manual-{対象読者}-src.md` |
+
+既存生成物の扱いは `.claude/commands/analyze-slide.md` の Step 5 と同じ方針
+（`docs/` は生成物なので自動リネームせず、再生成で揃える）。
+
 まず出力ディレクトリを作成：
 ```bash
 mkdir -p docs/slides

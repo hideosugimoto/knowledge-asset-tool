@@ -11,6 +11,13 @@ FORBIDDEN operations (unless repository is confirmed Private):
 - `git add -f site/`
 - Removing `docs/` or `site/` from `.gitignore`
 - `git push --no-verify`
+- Running `bash scripts/deploy_pages.sh` unconditionally
+- Running `mkdocs gh-deploy` directly
+
+`deploy_pages.sh` and `mkdocs gh-deploy` push `site/` (sensitive) to the `gh-pages`
+branch, where GitHub Pages may serve it publicly. `deploy_pages.sh` aborts unless the
+push target is Private; calling `mkdocs gh-deploy` directly bypasses that check.
+Always confirm with the user first and deploy only via `scripts/deploy_pages.sh`.
 
 To push docs safely: `python scripts/push_docs.py` (auto-blocks public repos).
 

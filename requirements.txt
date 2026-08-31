@@ -6,6 +6,10 @@ pyyaml>=6.0
 # MkDocs サイト生成:
 mkdocs-material>=9.0
 
+# 開発・テスト用（CI の .github/workflows/test.yml が使用）:
+pytest>=8.0
+pytest-cov>=5.0
+
 # オプション（特定機能で使用）:
 # playwright        — capture_screenshots.py（スクリーンショット撮影）
 # pandoc            — merge_pdf.py（PDF結合）※ システムパッケージ

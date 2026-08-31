@@ -333,22 +333,52 @@ class TestOutputDirectory:
 class TestPerformLogin:
     """ログイン処理のテスト（Playwright をモック）"""
 
+    @staticmethod
+    def _mock_page(count=1, visible=True):
+        """page.locator() が Locator 相当を返すモックを構築する。
+
+        実装は locator.count() を int と比較し、locator.first.is_visible() を
+        評価するため、素の MagicMock ではなく戻り値を明示的にモックする。
+        """
+        page = MagicMock()
+        locator = MagicMock()
+        locator.count.return_value = count
+        locator.first.is_visible.return_value = visible
+        page.locator.return_value = locator
+        return page, locator
+
     def test_login_calls_page_methods(self):
         """ログイン処理で正しいメソッドが呼ばれる"""
-        page = MagicMock()
+        page, locator = self._mock_page()
+
         _perform_login(page, "http://localhost/login", "u@ex.com", "pass")
 
         page.goto.assert_called_once_with(
             "http://localhost/login", wait_until="networkidle"
         )
-        page.fill.assert_any_call(
-            'input[type="email"], input[name="email"]', "u@ex.com"
-        )
-        page.fill.assert_any_call(
-            'input[type="password"], input[name="password"]', "pass"
-        )
-        page.click.assert_called_once_with('button[type="submit"]')
+        # ユーザー名フィールドは優先順の先頭セレクタで検出される
+        page.locator.assert_any_call('input[type="email"]')
+        page.locator.assert_any_call('input[type="password"]')
+        page.locator.assert_any_call('button[type="submit"]')
+
+        locator.first.fill.assert_any_call("u@ex.com")
+        locator.first.fill.assert_any_call("pass")
+        locator.first.click.assert_called_once_with()
         page.wait_for_load_state.assert_called_once_with("networkidle")
+
+    def test_raises_when_username_field_not_found(self):
+        """ユーザー名フィールドが見つからない場合は RuntimeError"""
+        page, _ = self._mock_page(count=0)
+
+        with pytest.raises(RuntimeError, match="ユーザー名フィールド"):
+            _perform_login(page, "http://localhost/login", "u@ex.com", "pass")
+
+    def test_raises_when_field_is_invisible(self):
+        """要素はあるが非表示の場合も検出されない"""
+        page, _ = self._mock_page(count=1, visible=False)
+
+        with pytest.raises(RuntimeError, match="ユーザー名フィールド"):
+            _perform_login(page, "http://localhost/login", "u@ex.com", "pass")
 
 
 # ---------------------------------------------------------------------------

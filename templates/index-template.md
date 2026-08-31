@@ -122,6 +122,7 @@ site/ をコピー → index.html をブラウザで開く
 ### ローカルプレビュー
 
 ```bash
-mkdocs serve
+python3 scripts/generate_nav.py
+mkdocs serve -f mkdocs.generated.yml
 # → http://localhost:8000
 ```

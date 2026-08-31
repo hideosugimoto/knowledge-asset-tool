@@ -10,6 +10,19 @@ Usage:
     python3 scripts/check_leakage.py --staged           # staged ファイルのみ
     python3 scripts/check_leakage.py --diff HEAD~1      # 直近コミットの差分
     python3 scripts/check_leakage.py --json              # JSON 出力
+
+--json 指定時、stdout には JSON オブジェクトのみを出力する（json.load でパース可能）:
+
+    {
+      "mode": "all tracked",
+      "scanned_files": 109,
+      "patterns": 16,
+      "summary": {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "total": 0},
+      "blocked": false,
+      "findings": [...]
+    }
+
+人間向けのサマリ行は stderr に出す。
 """
 
 import argparse
@@ -264,7 +277,7 @@ def format_findings(findings: list[Finding]) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
-def main(argv=None) -> int:
+def _parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="git 管理ファイルの情報漏洩チェック"
     )
@@ -280,7 +293,53 @@ def main(argv=None) -> int:
         "--json", action="store_true", dest="json_output",
         help="JSON 形式で出力",
     )
-    args = parser.parse_args(argv)
+    return parser.parse_args(argv)
+
+
+def _collect_files(repo_root: str, args) -> tuple[list[str], str]:
+    """スキャン対象のファイル一覧とモード名を返す。"""
+    if args.staged:
+        return get_staged_files(repo_root), "staged"
+    if args.diff:
+        return get_diff_files(repo_root, args.diff), f"diff {args.diff}"
+    return get_tracked_files(repo_root), "all tracked"
+
+
+def _count_by_severity(findings: list[Finding]) -> dict:
+    """深刻度別の件数と blocked 判定を返す。"""
+    counts = {
+        sev: sum(1 for f in findings if f.severity == sev)
+        for sev in ("CRITICAL", "HIGH", "MEDIUM")
+    }
+    counts["total"] = len(findings)
+    return counts
+
+
+def build_json_payload(findings: list[Finding], counts: dict, mode: str,
+                       scanned_files: int, patterns: int, blocked: bool) -> dict:
+    """--json 出力用の機械可読なオブジェクトを組み立てる。"""
+    return {
+        "mode": mode,
+        "scanned_files": scanned_files,
+        "patterns": patterns,
+        "summary": counts,
+        "blocked": blocked,
+        "findings": [
+            {
+                "file": f.file_path,
+                "line": f.line_number,
+                "severity": f.severity,
+                "pattern": f.pattern_name,
+                "matched": f.matched_text,
+                "description": f.description,
+            }
+            for f in findings
+        ],
+    }
+
+
+def main(argv=None) -> int:
+    args = _parse_args(argv)
 
     repo_root = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
@@ -291,47 +350,31 @@ def main(argv=None) -> int:
         print("[ERROR] git リポジトリ内で実行してください", file=sys.stderr)
         return 2
 
-    # パターン構築
     patterns = _build_patterns(repo_root)
-
-    # ファイルリスト取得
-    if args.staged:
-        files = get_staged_files(repo_root)
-        mode = "staged"
-    elif args.diff:
-        files = get_diff_files(repo_root, args.diff)
-        mode = f"diff {args.diff}"
-    else:
-        files = get_tracked_files(repo_root)
-        mode = "all tracked"
-
-    # スキャン実行
+    files, mode = _collect_files(repo_root, args)
     findings = scan_files(files, repo_root, patterns)
 
+    counts = _count_by_severity(findings)
+    blocked = counts["CRITICAL"] > 0 or counts["HIGH"] > 0
+    summary_line = (
+        f"NG: CRITICAL={counts['CRITICAL']}, HIGH={counts['HIGH']} — プッシュをブロックします"
+    )
+
     if args.json_output:
-        data = [
-            {
-                "file": f.file_path,
-                "line": f.line_number,
-                "severity": f.severity,
-                "pattern": f.pattern_name,
-                "matched": f.matched_text,
-                "description": f.description,
-            }
-            for f in findings
-        ]
-        print(json.dumps(data, ensure_ascii=False, indent=2))
+        # stdout は JSON のみ。サマリを混ぜると json.load が Extra data で失敗する。
+        payload = build_json_payload(
+            findings, counts, mode, len(files), len(patterns), blocked
+        )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        if blocked:
+            print(summary_line, file=sys.stderr)
     else:
         print(f"[INFO] 漏洩チェック ({mode}): {len(files)} ファイル, {len(patterns)} パターン")
         print(format_findings(findings))
+        if blocked:
+            print(f"\n  {summary_line}")
 
-    critical_count = sum(1 for f in findings if f.severity == "CRITICAL")
-    high_count = sum(1 for f in findings if f.severity == "HIGH")
-
-    if critical_count > 0 or high_count > 0:
-        print(f"\n  NG: CRITICAL={critical_count}, HIGH={high_count} — プッシュをブロックします")
-        return 1
-    return 0
+    return 1 if blocked else 0
 
 
 if __name__ == "__main__":

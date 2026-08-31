@@ -20,7 +20,8 @@ Engineers don't write documentation for three reasons:
 > **⚠️ Security Warning: You MUST create this as a Private repository.**
 > Generated documentation contains DB schemas, API specs, and business logic from the analyzed codebase.
 > Pushing to a public repository is an information leak.
-> (If docs/ is accidentally pushed to a public repo, GitHub Actions will auto-remove it.)
+> (If docs/ is accidentally pushed to a public repo, GitHub Actions auto-removes it
+> **after the fact** -- but it stays in git history. This is remediation, not prevention.)
 
 **Option A: Command Line (recommended — guarantees Private)**
 
@@ -73,7 +74,8 @@ Answer the questions, type "OK", and wait. Everything runs automatically:
 
 ```bash
 # View with MkDocs site (searchable, navigable)
-mkdocs serve
+python3 scripts/generate_nav.py            # writes nav to mkdocs.generated.yml
+mkdocs serve -f mkdocs.generated.yml
 # → http://localhost:8000
 
 # Or open slides directly
@@ -174,23 +176,53 @@ docs/
 └── index.md                     # Portal for all projects
 ```
 
-## Security: 4-Layer Leak Prevention
+## Security: 5-Layer Leak Prevention
 
-Generated docs contain sensitive information. The following defenses are **automatically applied** to repositories created from this template.
+Generated docs contain sensitive information. The following defenses apply to repositories created from this template.
 
 ```
 Layer 1: .gitignore       — git add . never includes docs/ (no user action needed)
 Layer 2: AI instructions  — AI tools are told not to git add -f docs/ (auto-loaded)
-Layer 3: GitHub Actions   — If docs/ pushed to Public repo → auto-delete + Issue
+Layer 3: pre-push hook    — Resolves the push target's visibility; aborts if not Private
+                            (* requires manual activation)
 Layer 4: push_docs.py     — Private-verified push (the only sanctioned method)
+Layer 5: GitHub Actions   — After docs/ reaches a Public repo: auto-delete + Issue
+                            (* detection and remediation, NOT prevention -- git history keeps it)
 ```
 
 | Layer | Target | Mechanism | Auto-applied |
 |-------|--------|-----------|:------------:|
 | `.gitignore` | Humans + all AI | Block docs/, site/ from `git add .` | Yes |
 | AI instruction files | Claude Code, Copilot, Cursor, Windsurf, Codex | Prohibit `git add -f docs/` and `.gitignore` modification | Yes |
-| GitHub Actions | Everything (last line of defense) | Auto-remove docs/ + create Issue | Yes |
-| `push_docs.py` | Sanctioned publish path | Check `gh repo view --json visibility` before push | Yes |
+| `.githooks/pre-push` | Humans + all AI (just before push) | Resolve push target visibility + run leak scan; block on Public or unknown | **No (manual activation)** |
+| `push_docs.py` | Sanctioned publish path | `gh repo view <owner/repo>` on the actual push target before pushing | Yes |
+| GitHub Actions | Post-hoc detection and remediation | Public + docs/ detected → auto-remove commit + Issue | Yes |
+
+### Activating the pre-push hook (manual)
+
+The pre-push hook does not run on a fresh clone. Run one of these once:
+
+```bash
+# Option A: copy .githooks/ into .git/hooks/
+bash scripts/setup-hooks.sh
+
+# Option B: point git at .githooks/ (stays up to date on pull)
+git config core.hooksPath .githooks
+```
+
+Verify:
+
+```bash
+git config --get core.hooksPath   # -> .githooks (option B)
+ls -l .git/hooks/pre-push         # -> exists if option A was used
+```
+
+### The GitHub Actions layer is detection, not prevention
+
+Layer 5 runs **after** the push. It removes the files from the working tree, but
+**the leaked commit remains in git history** (the Issue it opens tells you to rewrite
+history with `filter-branch` or BFG). If sensitive data reached a Public repo even once,
+rewrite the history and take content-appropriate follow-up action (e.g. credential rotation).
 
 ### AI Instruction Files
 
