@@ -3,8 +3,37 @@ set -euo pipefail
 
 # pre-push guard
 # knowledge-asset-tool に docs/ が混入していないかチェックする
+#
+# git は pre-push フックを次の引数で呼び出す:
+#   $1 = push 先の remote 名   $2 = push 先の remote URL
+# 可視性は「今まさに push しようとしている remote」に対して判定する。
+# origin の可視性で代用すると、public な別 remote への push を通してしまう。
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
+
+PUSH_REMOTE_NAME="${1:-}"
+PUSH_REMOTE_URL="${2:-}"
+
+# $2 が空でも remote 名から URL を引き直す
+if [ -z "$PUSH_REMOTE_URL" ] && [ -n "$PUSH_REMOTE_NAME" ]; then
+  PUSH_REMOTE_URL=$(git remote get-url "$PUSH_REMOTE_NAME" 2>/dev/null || echo "")
+fi
+
+# remote URL から owner/repo を解決する
+# 対応形式: https://github.com/owner/repo(.git) / git@github.com:owner/repo(.git)
+#           ssh://git@github.com/owner/repo(.git)
+resolve_owner_repo() {
+  local url="$1"
+  url="${url%.git}"
+  url="${url%/}"
+  case "$url" in
+    *github.com:*)  echo "${url##*github.com:}" ;;
+    *github.com/*)  echo "${url##*github.com/}" ;;
+    *)              echo "" ;;
+  esac
+}
+
+PUSH_OWNER_REPO=$(resolve_owner_repo "$PUSH_REMOTE_URL")
 
 if [ -t 1 ]; then
   RED=$(tput setaf 1)
@@ -24,23 +53,27 @@ printf "%s\n" "🔍 プッシュ前チェックを実行中..."
 DOCS_IN_GIT=$(git ls-files docs/ 2>/dev/null | grep -v '^docs/stylesheets/' || true)
 
 if [ -n "$DOCS_IN_GIT" ]; then
-  # docs/ が含まれている → Private リポジトリなら許可、それ以外はブロック
+  # docs/ が含まれている → push 先が Private なら許可、それ以外はブロック
   VISIBILITY=""
-  if command -v gh &>/dev/null; then
-    VISIBILITY=$(gh repo view --json visibility -q '.visibility' 2>/dev/null || echo "")
+  if [ -n "$PUSH_OWNER_REPO" ] && command -v gh &>/dev/null; then
+    VISIBILITY=$(gh repo view "$PUSH_OWNER_REPO" --json visibility -q '.visibility' 2>/dev/null || echo "")
   fi
 
   if [ "$VISIBILITY" = "PRIVATE" ]; then
-    printf "%s%s%s\n" "$GREEN" "✅ Private リポジトリです。docs/ のプッシュを許可します。" "$NC"
+    printf "%s%s%s\n" "$GREEN" "✅ push 先 ${PUSH_OWNER_REPO} は Private です。docs/ のプッシュを許可します。" "$NC"
   else
     printf "\n"
     printf "%s%s%s\n" "$RED" "⛔ docs/ のプッシュをブロックしました！" "$NC"
     printf "\n"
-    if [ -z "$VISIBILITY" ]; then
-      printf "%s\n" "リポジトリの可視性を確認できませんでした（gh CLI 未インストール or 未認証）。"
+    printf "%s\n" "push 先 remote: ${PUSH_REMOTE_NAME:-(不明)} ${PUSH_REMOTE_URL:+($PUSH_REMOTE_URL)}"
+    if [ -z "$PUSH_OWNER_REPO" ]; then
+      printf "%s\n" "push 先 URL から owner/repo を解決できませんでした。"
+      printf "%s\n" "GitHub 以外のホストは可視性を判定できないため、安全のためブロックします。"
+    elif [ -z "$VISIBILITY" ]; then
+      printf "%s\n" "${PUSH_OWNER_REPO} の可視性を確認できませんでした（gh CLI 未インストール / 未認証 / 権限不足）。"
       printf "%s\n" "安全のため、可視性が確認できない場合もブロックします。"
     else
-      printf "%s\n" "リポジトリの可視性: ${VISIBILITY}"
+      printf "%s\n" "push 先 ${PUSH_OWNER_REPO} の可視性: ${VISIBILITY}"
     fi
     printf "\n"
     printf "%s\n" "該当ファイル："
@@ -54,8 +87,8 @@ if [ -n "$DOCS_IN_GIT" ]; then
     printf "%s%s%s\n" "$YELLOW" "含まれる可能性があります。Public リポジトリへのプッシュは許可されません。" "$NC"
     printf "\n"
     printf "%s\n" "対処方法："
-    printf "%s\n" "  (A) リポジトリを Private に変更する:"
-    printf "%s\n" "      gh repo edit --visibility private"
+    printf "%s\n" "  (A) push 先リポジトリを Private に変更する:"
+    printf "%s\n" "      gh repo edit ${PUSH_OWNER_REPO:-<owner/repo>} --visibility private"
     printf "%s\n" "  (B) docs/ をリポジトリから除去する:"
     printf "%s\n" "      git rm -r --cached docs/"
     printf "%s\n" "      git commit -m 'remove docs from tracking'"
