@@ -12,6 +12,14 @@
 2. `git add -f site/` — 禁止
 3. `.gitignore` から `docs/` や `site/` の行を削除・コメントアウト — 禁止
 4. `git push --no-verify` — 禁止
+5. `bash scripts/deploy_pages.sh` の無条件実行 — 禁止
+6. `mkdocs gh-deploy` の直接実行 — 禁止
+
+`deploy_pages.sh` と `mkdocs gh-deploy` は `site/`（分析対象の機密情報を含む）を
+gh-pages ブランチへ push する。Public リポジトリでは GitHub Pages で公開されうる。
+`deploy_pages.sh` は push 先の可視性を検証して Public なら中止するが、
+`mkdocs gh-deploy` を直接叩くとその検証を丸ごと迂回してしまう。
+デプロイが必要な場合は必ずユーザーに確認を取り、`scripts/deploy_pages.sh` 経由で実行すること。
 
 **docs/ と site/ には分析対象システムの機密情報が含まれる:**
 - データベース構造（テーブル名、カラム名、ER図）

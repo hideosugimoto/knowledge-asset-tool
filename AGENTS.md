@@ -17,6 +17,14 @@ Generated documentation contains **sensitive information** from analyzed codebas
 - `git add -f site/` — FORBIDDEN
 - Removing `docs/` or `site/` from `.gitignore` — FORBIDDEN
 - `git push --no-verify` — FORBIDDEN
+- Running `bash scripts/deploy_pages.sh` unconditionally — FORBIDDEN
+- Running `mkdocs gh-deploy` directly — FORBIDDEN
+
+`deploy_pages.sh` and `mkdocs gh-deploy` push `site/` (which contains the analyzed
+system's sensitive information) to the `gh-pages` branch, where GitHub Pages may serve
+it publicly. `deploy_pages.sh` verifies the push target's visibility and aborts unless
+it is Private; calling `mkdocs gh-deploy` directly bypasses that check entirely.
+Always confirm with the user first, and deploy only via `scripts/deploy_pages.sh`.
 
 **To push docs safely:**
 ```bash

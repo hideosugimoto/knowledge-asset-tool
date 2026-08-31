@@ -20,7 +20,8 @@
 > **⚠️ セキュリティ警告: 必ず Private リポジトリとして作成してください。**
 > 生成ドキュメントには分析対象のDB構造・API仕様・ビジネスロジック等が含まれます。
 > Public リポジトリにプッシュすると情報漏洩になります。
-> （万が一 Public に docs/ をプッシュした場合は GitHub Actions が自動削除します）
+> （万が一 Public に docs/ をプッシュした場合、GitHub Actions が事後に自動削除しますが、
+> **git 履歴には残ります**。防止ではなく事後対応です）
 
 **方法A: コマンドライン（推奨・確実にPrivateになります）**
 
@@ -190,23 +191,53 @@ docs/
 └── index.md                   # 全プロジェクトのポータル
 ```
 
-## セキュリティ: 4層の情報漏洩防止
+## セキュリティ: 5層の情報漏洩防止
 
-生成ドキュメントには分析対象の機密情報が含まれます。テンプレートから作成されたリポジトリに以下の防御が **自動で適用** されます。
+生成ドキュメントには分析対象の機密情報が含まれます。テンプレートから作成されたリポジトリに以下の防御が適用されます。
 
 ```
 第1層: .gitignore       — git add . で docs/ が混入しない（ユーザー操作不要）
 第2層: AI指示ファイル   — AIツールに git add -f docs/ を禁止（自動読み込み）
-第3層: GitHub Actions   — Public に docs/ がプッシュされたら即自動削除 + Issue通知
+第3層: pre-push フック  — push 先の可視性を判定し、Public なら push を中止
+                          （★ 有効化に手動操作が必要）
 第4層: push_docs.py     — Private確認付きの唯一の正規プッシュ手段
+第5層: GitHub Actions   — Public に docs/ がプッシュされた後に検知して自動削除 + Issue通知
+                          （★ 防止ではなく事後対応。git 履歴には残る）
 ```
 
 | 防御層 | 対象 | 仕組み | テンプレート自動適用 |
 |--------|------|--------|:------------------:|
 | `.gitignore` | 人間 + AI全般 | `git add .` で docs/, site/ をブロック | はい |
 | AI指示ファイル | Claude Code, Copilot, Cursor, Windsurf, Codex | `git add -f docs/` と `.gitignore` 改変を禁止 | はい |
-| GitHub Actions | 全て（最終防衛線） | Public + docs/ 検出 → 自動削除コミット + Issue作成 | はい |
-| `push_docs.py` | 正規の公開手段 | `gh repo view` で Private 判定後にのみ push | はい |
+| `.githooks/pre-push` | 人間 + AI全般（push 直前） | push 先 remote の可視性を判定 + 漏洩スキャン。Public / 判定不能ならブロック | **いいえ（手動で有効化）** |
+| `push_docs.py` | 正規の公開手段 | push 先 remote の `gh repo view <owner/repo>` で Private 判定後にのみ push | はい |
+| GitHub Actions | 事後の検知と復旧 | Public + docs/ 検出 → 自動削除コミット + Issue作成 | はい |
+
+### pre-push フックの有効化（手動）
+
+pre-push フックは clone しただけでは動作しません。次のいずれかを一度だけ実行してください。
+
+```bash
+# 方法A: .githooks/ を .git/hooks/ にコピーする
+bash scripts/setup-hooks.sh
+
+# 方法B: git の hooksPath を .githooks/ に向ける（以後 pull で自動更新される）
+git config core.hooksPath .githooks
+```
+
+有効化されているかの確認:
+
+```bash
+git config --get core.hooksPath   # → .githooks（方法B の場合）
+ls -l .git/hooks/pre-push         # → 存在すれば方法A で有効
+```
+
+### GitHub Actions 層は「防止」ではなく「検知と事後対応」
+
+第5層は **push された後** に動きます。作業ツリーからは自動削除されますが、
+**漏洩したコミットは git 履歴に残ります**（Issue 本文も `filter-branch` / BFG による
+履歴書き換えを促します）。公開範囲の広い情報が一度でも Public に出た場合は、
+履歴の書き換えに加えて、内容に応じた対処（認証情報のローテーション等）を検討してください。
 
 ### AI指示ファイル
 
