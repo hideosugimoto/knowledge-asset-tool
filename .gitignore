@@ -6,6 +6,10 @@ docs/
 # 分析キャッシュ（DB接続情報を含む可能性あり）
 .cache/
 
+# generate_nav.py が生成する nav 付き MkDocs 設定
+# （nav には分析対象のプロジェクト名・機能名・ファイルパスが並ぶ）
+mkdocs.generated.yml
+
 # 一時ファイル
 /tmp/
 *.tmp

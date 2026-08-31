@@ -1,3 +1,17 @@
+# このファイルは追跡対象（git 管理下）。分析対象の情報を書き込まないこと。
+#
+# nav はここには書かない。
+# nav には分析対象のプロジェクト名・機能名・ファイルパスが並ぶため、
+# 追跡ファイルに書き込むと実行のたびに機密情報が git に混入する。
+# nav は scripts/generate_nav.py が mkdocs.generated.yml（gitignore 対象）へ
+# 出力し、そのファイルが INHERIT でこの設定を取り込む。
+#
+#   python3 scripts/generate_nav.py
+#   mkdocs build -f mkdocs.generated.yml
+#
+# mkdocs.generated.yml が無い状態でも mkdocs build は動作する
+# （その場合 nav は docs/ のファイル構成から自動生成される）。
+
 site_name: "knowledge-asset-tool Documentation"
 site_description: "knowledge-asset-tool で自動生成されたドキュメントサイト"
 docs_dir: docs
@@ -49,8 +63,3 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
-
-nav:
-  - "Home": index.md
-  # nav セクションは generate_nav.py で自動生成される
-  # 手動で追記しないこと（分析対象の情報が含まれるため）

@@ -3,6 +3,7 @@
 # Usage: bash scripts/deploy_pages.sh [--remote <name>]
 #
 # 前提: mkdocs build 済みで site/ が存在すること
+#       nav を反映する場合は先に python3 scripts/generate_nav.py を実行すること
 # 動作: gh-pages ブランチに site/ の内容をプッシュする
 #
 # 安全装置（いずれかに引っかかったら中止する）:
@@ -195,7 +196,16 @@ fi
 # 6. mkdocs gh-deploy 実行
 # ---------------------------------------------------------------------------
 info "GitHub Pages にデプロイ中..."
-mkdocs gh-deploy --remote-name "$REMOTE" --force
+# nav 付きの設定 (mkdocs.generated.yml) があればそれを使う。
+# 無い場合は mkdocs.yml で（nav は docs/ の構成から自動生成される）。
+if [ -f "${REPO_ROOT}/mkdocs.generated.yml" ]; then
+    info "設定ファイル: mkdocs.generated.yml"
+    mkdocs gh-deploy --config-file "${REPO_ROOT}/mkdocs.generated.yml" --remote-name "$REMOTE" --force
+else
+    warn "mkdocs.generated.yml が無いため mkdocs.yml でデプロイします。"
+    warn "nav を反映するには先に python3 scripts/generate_nav.py を実行してください。"
+    mkdocs gh-deploy --remote-name "$REMOTE" --force
+fi
 
 info "デプロイ完了！"
 info "数分後に GitHub Pages で閲覧可能になります。"

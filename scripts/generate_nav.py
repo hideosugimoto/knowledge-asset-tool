@@ -1,20 +1,40 @@
 #!/usr/bin/env python3
-"""docs/ ディレクトリを走査して mkdocs.yml の nav セクションを自動生成する。
+"""docs/ ディレクトリを走査して MkDocs の nav を自動生成する。
+
+出力先は mkdocs.generated.yml（.gitignore 対象）で、mkdocs.yml は変更しない。
+
+なぜ mkdocs.yml に直接書かないか:
+    nav には分析対象のプロジェクト名・機能名・ファイルパスが並ぶ。
+    mkdocs.yml は追跡対象（git 管理下）なので、そこへ書き込むと
+    実行のたびに追跡ファイルが機密情報で汚染される。
+
+なぜ INHERIT 方式か（awesome-nav 等のプラグイン方式ではなく）:
+    - 追加依存が不要。MkDocs 本体の機能だけで完結する
+    - mkdocs.generated.yml が存在しなくても `mkdocs build` は動作する
+      （nav は docs/ の構成から自動生成される）。
+      逆に mkdocs.yml 側に `INHERIT: docs/.nav.yml` と書く方式は、
+      対象ファイルが無いと "Inherited config file does not exist" で
+      ビルドが必ず失敗する（テンプレート直後のクローンで壊れる）ため採用しない
 
 使い方:
-    python scripts/generate_nav.py          # mkdocs.yml を上書き更新
-    python scripts/generate_nav.py --dry-run  # 生成結果を stdout に表示(ファイル変更なし)
+    python3 scripts/generate_nav.py            # mkdocs.generated.yml を生成
+    python3 scripts/generate_nav.py --dry-run  # 生成結果を stdout に表示(ファイル変更なし)
+
+生成後のビルド:
+    mkdocs build -f mkdocs.generated.yml
+    mkdocs serve -f mkdocs.generated.yml
 """
 
 from __future__ import annotations
 
 import argparse
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 MKDOCS_YML = ROOT / "mkdocs.yml"
+# nav 付きの生成設定。mkdocs.yml を INHERIT して nav だけを上書きする。
+GENERATED_YML = ROOT / "mkdocs.generated.yml"
 
 # --- タイトル抽出 ---------------------------------------------------------- #
 
@@ -219,33 +239,44 @@ def render_nav_yaml(nav: list) -> str:
     return "\n".join(lines) + "\n"
 
 
-# --- mkdocs.yml 更新 ------------------------------------------------------- #
+# --- 生成設定の書き出し ----------------------------------------------------- #
 
-NAV_PATTERN = re.compile(r"^nav:\s*\n(?:(?:[ \t]+-.*|[ \t]*\n))*", re.MULTILINE)
+GENERATED_HEADER = """\
+# 自動生成ファイル — 直接編集しないこと。
+# 生成元: scripts/generate_nav.py
+#
+# nav には分析対象のプロジェクト名・機能名・ファイルパスが含まれるため、
+# このファイルは .gitignore 対象。git に追加しないこと。
+#
+# ビルド:
+#   mkdocs build -f mkdocs.generated.yml
+#   mkdocs serve -f mkdocs.generated.yml
+
+INHERIT: mkdocs.yml
+
+"""
 
 
-def update_mkdocs_yml(nav_yaml: str, *, dry_run: bool = False) -> str:
-    """mkdocs.yml の nav セクションを差し替える。"""
-    content = MKDOCS_YML.read_text(encoding="utf-8")
+def render_generated_config(nav_yaml: str) -> str:
+    """mkdocs.generated.yml の全文を返す。"""
+    return GENERATED_HEADER + nav_yaml
 
-    match = NAV_PATTERN.search(content)
-    if match:
-        new_content = content[: match.start()] + nav_yaml + content[match.end() :]
-    else:
-        # nav セクションが無ければ末尾に追加
-        new_content = content.rstrip("\n") + "\n\n" + nav_yaml
 
+def write_generated_config(nav_yaml: str, *, dry_run: bool = False) -> str:
+    """mkdocs.generated.yml を書き出す（mkdocs.yml は変更しない）。"""
+    content = render_generated_config(nav_yaml)
     if not dry_run:
-        MKDOCS_YML.write_text(new_content, encoding="utf-8")
-
-    return new_content
+        GENERATED_YML.write_text(content, encoding="utf-8")
+    return content
 
 
 # --- main ------------------------------------------------------------------ #
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="mkdocs.yml の nav を自動生成する")
+    parser = argparse.ArgumentParser(
+        description="MkDocs の nav を mkdocs.generated.yml に自動生成する"
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -257,10 +288,11 @@ def main() -> None:
     nav_yaml = render_nav_yaml(nav)
 
     if args.dry_run:
-        print(nav_yaml)
+        print(render_generated_config(nav_yaml))
     else:
-        update_mkdocs_yml(nav_yaml)
-        print("mkdocs.yml の nav セクションを更新しました。")
+        write_generated_config(nav_yaml)
+        print(f"{GENERATED_YML.name} を生成しました（mkdocs.yml は変更していません）。")
+        print(f"  ビルド: mkdocs build -f {GENERATED_YML.name}")
 
 
 if __name__ == "__main__":

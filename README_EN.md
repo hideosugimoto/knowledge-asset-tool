@@ -73,7 +73,8 @@ Answer the questions, type "OK", and wait. Everything runs automatically:
 
 ```bash
 # View with MkDocs site (searchable, navigable)
-mkdocs serve
+python3 scripts/generate_nav.py            # writes nav to mkdocs.generated.yml
+mkdocs serve -f mkdocs.generated.yml
 # → http://localhost:8000
 
 # Or open slides directly

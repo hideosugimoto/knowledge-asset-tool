@@ -370,7 +370,7 @@ Run scripts and site generation directly in the main session.
 2. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link`
 3. Follow .claude/commands/generate-site.md to generate MkDocs config
 4. Generate `./docs/{name}-index.md` from `templates/index-template-en.md` and add portal link to `./docs/index.md`
-5. `mkdocs build` -- Build site/ for sharing
+5. `mkdocs build -f mkdocs.generated.yml` -- Build site/ for sharing
 
 **Steps 4 and 5 are common to all modes and must always run when any artifact is generated.**
 
@@ -466,10 +466,12 @@ python3 scripts/split_diagram.py --docs-dir ./docs --name {name} --auto
 If `mkdocs` is installed, run:
 
 ```bash
-mkdocs build
+python3 scripts/generate_nav.py
+mkdocs build -f mkdocs.generated.yml
 ```
 
 This generates a self-contained HTML site in `site/`.
+The nav is written to `mkdocs.generated.yml` (gitignored); `mkdocs.yml` is never modified.
 Share by copying the folder; recipients just open `site/index.html` in a browser.
 
 If `mkdocs` is not installed: `pip3 install --break-system-packages mkdocs-material`

@@ -88,7 +88,8 @@ claude
 
 ```bash
 # MkDocsサイトで確認（検索・ナビゲーション付き）
-mkdocs serve
+python3 scripts/generate_nav.py            # nav を mkdocs.generated.yml に生成
+mkdocs serve -f mkdocs.generated.yml
 # → http://localhost:8000
 
 # または直接スライドを開く

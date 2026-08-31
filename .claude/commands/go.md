@@ -421,7 +421,7 @@ Phase A の出力に依存するため、Phase A 検証後に起動する。
 2. `python scripts/convert_diagrams.py --docs-dir ./docs --add-external-link`
 3. .claude/commands/generate-site.md の「実行手順」に従って MkDocs 設定を生成
 4. `templates/index-template.md` を元に `./docs/{名前}-index.md` を生成し、`./docs/index.md` にポータルリンクを追記
-5. `mkdocs build` を実行して `site/` に共有用HTML一式を生成
+5. `mkdocs build -f mkdocs.generated.yml` を実行して `site/` に共有用HTML一式を生成
 
 **⚠️ Phase C の 4, 5 は全モード共通で、成果物が1つでも生成されたら必ず実行すること。**
 
@@ -576,10 +576,12 @@ python3 scripts/score_quality.py --docs-dir ./docs --name {名前}
 `mkdocs` がインストール済みの場合、以下を実行してフォルダコピーで共有可能なHTMLサイトを生成：
 
 ```bash
-mkdocs build
+python3 scripts/generate_nav.py
+mkdocs build -f mkdocs.generated.yml
 ```
 
 `site/` ディレクトリに自己完結型のHTMLサイトが生成される。
+nav は `mkdocs.generated.yml`（.gitignore 対象）に生成される。`mkdocs.yml` は変更しない。
 このフォルダをそのまま共有相手に渡せば、ブラウザで `site/index.html` を開くだけで閲覧できる。
 
 `mkdocs` 未インストールの場合は `pip3 install --break-system-packages mkdocs-material` でインストールする。
