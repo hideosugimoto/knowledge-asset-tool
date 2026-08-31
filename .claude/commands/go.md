@@ -670,6 +670,10 @@ python3 scripts/capture_screenshots.py --base-url {推定URL} --routes /dev/null
 2. `docs/` 外（`/tmp/` 等）を参照している画像ファイルを `docs/slides/{名前}/images/` にコピーする
 3. スライド Markdown 内のパスを相対パス `images/{filename}` に書き換える
 4. Marp で HTML/PDF/PPTX を再生成する（パス書き換え後に再変換が必須）
+   **⚠️ `docs/slides/` に残す Marp ソース Markdown は `-src.md` 接尾辞にすること。**
+   `<name>.md` と `<name>.html` が同居すると、MkDocs（`use_directory_urls: false`）が
+   .md をレンダリングして実スライド HTML を上書きする。
+   詳細は `.claude/commands/analyze-slide.md` の Step 5「出力ファイルの命名規則」を参照。
 5. `python3 scripts/check_links.py --docs-dir ./docs` でリンク切れゼロを確認する
 
 **⚠️ このステップは Step 5.5（品質チェック）より後、Step 6.8 より前に実行する。**

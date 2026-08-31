@@ -260,6 +260,40 @@ style: |
 
 ### Step 5: 変換実行
 
+### ⚠️ 出力ファイルの命名規則（必須）
+
+`mkdocs.yml` は `use_directory_urls: false` のため、MkDocs は `<name>.md` を
+`<name>.html` にレンダリングする。同じディレクトリに `<name>.md` と `<name>.html`
+が同居すると、**MkDocs が .md 由来の HTML で実スライド HTML を上書きする**。
+リンクは 404 にならず中身だけが差し替わるため気づけない。
+
+    WARNING - Excluding 'slides/x/y.html' from the site because it conflicts with 'slides/x/y.md'.
+
+**したがって、docs/slides/ 配下に置く Marp ソース Markdown は必ず `-src.md` 接尾辞にする。**
+
+| 種別 | ファイル名 |
+|------|-----------|
+| スライド本体 | `docs/slides/{機能名}-{対象読者}.html` / `.pdf` / `.pptx` |
+| Marp ソース | `docs/slides/{機能名}-{対象読者}-src.md` |
+
+`.md` と `.html` の stem を絶対に一致させないこと。
+
+**既存生成物の扱い（方針）**
+
+`docs/` は `.gitignore` 対象の生成物であり、再生成すれば新しい命名規則に揃う。
+そのため既存ファイルの自動リネームは行わない
+（複数プロジェクトの成果物が同居する運用で、無関係なファイルを触るリスクがあるため）。
+旧命名のまま残っているスライドがある場合のみ、手動で移行する:
+
+```bash
+# 衝突している .md を確認（mkdocs build の警告で検出できる）
+python3 -m mkdocs build -f mkdocs.generated.yml 2>&1 | grep "conflicts with"
+
+# 該当ファイルを -src.md にリネームしてから再変換する
+mv docs/slides/{機能名}-{対象読者}.md docs/slides/{機能名}-{対象読者}-src.md
+marp docs/slides/{機能名}-{対象読者}-src.md --html -o docs/slides/{機能名}-{対象読者}.html
+```
+
 形式に応じて以下のコマンドを実行してください。
 
 まず出力ディレクトリを作成：
@@ -311,10 +345,12 @@ marp /tmp/{機能名}-{対象読者}.md --html --pptx -o docs/slides/{機能名}
    ```
 3. スライド Markdown 内のパスを相対パス `{機能名}/images/{filename}` に書き換える:
    - `/tmp/{機能名}-slide-N.svg` → `{機能名}/images/{機能名}-slide-N.svg`
-4. 書き換え後のスライド Markdown を `/tmp/` から `docs/slides/{機能名}-{対象読者}.md` にもコピーする
+4. 書き換え後のスライド Markdown を `/tmp/` から
+   **`docs/slides/{機能名}-{対象読者}-src.md`** にコピーする
+   （`-src` を付けないと MkDocs が実スライド HTML を上書きする。Step 5 の命名規則を参照）
 5. Marp で再変換する（パス書き換え後に再変換が必須）:
    ```bash
-   marp docs/slides/{機能名}-{対象読者}.md --html -o docs/slides/{機能名}-{対象読者}.html
+   marp docs/slides/{機能名}-{対象読者}-src.md --html -o docs/slides/{機能名}-{対象読者}.html
    ```
 
 ### Step 7: 中間ファイルのクリーンアップ
@@ -336,10 +372,10 @@ Marp ソースファイル（`/tmp/{機能名}-{対象読者}.md`）は他の形
    対象読者：{対象読者}
    Mermaid図：N個（SVG変換済み）
 
-他の形式に変換したい場合：
-  HTML: marp /tmp/{機能名}-{対象読者}.md --html -o docs/slides/{機能名}-{対象読者}.html
-  PDF:  marp /tmp/{機能名}-{対象読者}.md --html --pdf -o docs/slides/{機能名}-{対象読者}.pdf
-  PPTX: marp /tmp/{機能名}-{対象読者}.md --html --pptx -o docs/slides/{機能名}-{対象読者}.pptx
+他の形式に変換したい場合（Marp ソースは docs/slides/{機能名}-{対象読者}-src.md）：
+  HTML: marp docs/slides/{機能名}-{対象読者}-src.md --html -o docs/slides/{機能名}-{対象読者}.html
+  PDF:  marp docs/slides/{機能名}-{対象読者}-src.md --html --pdf -o docs/slides/{機能名}-{対象読者}.pdf
+  PPTX: marp docs/slides/{機能名}-{対象読者}-src.md --html --pptx -o docs/slides/{機能名}-{対象読者}.pptx
   ※ Google スライドへは PPTXをインポートして使えます
 
 生成内容の実在性を検証するには：

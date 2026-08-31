@@ -286,6 +286,11 @@ Generate output in `--- FILE: docs/.../{name}.md ---` format.
 Follow the "Execution" section of .claude/commands/analyze-slide.md.
 Run Marp CLI to convert files automatically.
 
+**Naming rule (required):** any Marp source Markdown left under `docs/slides/`
+must use the `-src.md` suffix. With `use_directory_urls: false`, MkDocs renders
+`<name>.md` to `<name>.html` and silently replaces the real slide HTML when both
+share a stem. See "出力ファイルの命名規則" in analyze-slide.md Step 5.
+
 ### Output mode f) Complete Manual
 
 Follow the "Execution" section of .claude/commands/manual.md.
