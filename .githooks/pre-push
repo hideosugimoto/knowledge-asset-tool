@@ -19,18 +19,72 @@ if [ -z "$PUSH_REMOTE_URL" ] && [ -n "$PUSH_REMOTE_NAME" ]; then
   PUSH_REMOTE_URL=$(git remote get-url "$PUSH_REMOTE_NAME" 2>/dev/null || echo "")
 fi
 
-# remote URL から owner/repo を解決する
-# 対応形式: https://github.com/owner/repo(.git) / git@github.com:owner/repo(.git)
-#           ssh://git@github.com/owner/repo(.git)
 resolve_owner_repo() {
+  # remote URL から owner/repo を解決する。
+  #
+  # ホスト名が github.com と**完全一致**する場合のみ解決する。
+  # 部分一致（*github.com/*）にすると notgithub.com や
+  # evil.example.com/github.com/... が github.com のリポジトリとして
+  # 判定され、可視性チェックが fail open してしまう。
+  #
+  # 対応形式:
+  #   https://github.com/owner/repo(.git)
+  #   ssh://git@github.com:22/owner/repo(.git)
+  #   git@github.com:owner/repo(.git)
   local url="$1"
-  url="${url%.git}"
-  url="${url%/}"
-  case "$url" in
-    *github.com:*)  echo "${url##*github.com:}" ;;
-    *github.com/*)  echo "${url##*github.com/}" ;;
-    *)              echo "" ;;
+  local rest host path owner repo
+
+  if [ -z "$url" ]; then
+    echo ""
+    return 0
+  fi
+
+  if [ "${url#*://}" != "$url" ]; then
+    # scheme://[user@]host[:port]/path
+    rest="${url#*://}"
+    rest="${rest#*@}"
+    host="${rest%%/*}"
+    host="${host%%:*}"
+    if [ "${rest#*/}" = "$rest" ]; then
+      path=""
+    else
+      path="${rest#*/}"
+    fi
+  elif [ "${url#*:}" != "$url" ]; then
+    # scp 形式: [user@]host:path
+    rest="${url#*@}"
+    host="${rest%%:*}"
+    path="${rest#*:}"
+  else
+    echo ""
+    return 0
+  fi
+
+  host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+  if [ "$host" != "github.com" ]; then
+    echo ""
+    return 0
+  fi
+
+  path="${path#/}"
+  path="${path%/}"
+  path="${path%.git}"
+
+  # GitHub の remote は必ず owner/repo の 2 要素。
+  # 要素数が違うものは解析できていないとみなして中止する。
+  case "$path" in
+    */*/*) echo ""; return 0 ;;
+    */*)   ;;
+    *)     echo ""; return 0 ;;
   esac
+
+  owner="${path%%/*}"
+  repo="${path#*/}"
+  if [ -z "$owner" ] || [ -z "$repo" ]; then
+    echo ""
+    return 0
+  fi
+  echo "${owner}/${repo}"
 }
 
 PUSH_OWNER_REPO=$(resolve_owner_repo "$PUSH_REMOTE_URL")
@@ -68,7 +122,8 @@ if [ -n "$DOCS_IN_GIT" ]; then
     printf "%s\n" "push 先 remote: ${PUSH_REMOTE_NAME:-(不明)} ${PUSH_REMOTE_URL:+($PUSH_REMOTE_URL)}"
     if [ -z "$PUSH_OWNER_REPO" ]; then
       printf "%s\n" "push 先 URL から owner/repo を解決できませんでした。"
-      printf "%s\n" "GitHub 以外のホストは可視性を判定できないため、安全のためブロックします。"
+      printf "%s\n" "可視性を判定できるのは github.com のリポジトリのみです。"
+      printf "%s\n" "判定できないホストへの push は安全のためブロックします。"
     elif [ -z "$VISIBILITY" ]; then
       printf "%s\n" "${PUSH_OWNER_REPO} の可視性を確認できませんでした（gh CLI 未インストール / 未認証 / 権限不足）。"
       printf "%s\n" "安全のため、可視性が確認できない場合もブロックします。"

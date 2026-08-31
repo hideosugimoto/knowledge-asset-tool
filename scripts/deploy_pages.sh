@@ -69,18 +69,71 @@ done
 # remote URL から owner/repo を解決する
 # ---------------------------------------------------------------------------
 resolve_owner_repo() {
+    # remote URL から owner/repo を解決する。
+    #
+    # ホスト名が github.com と**完全一致**する場合のみ解決する。
+    # 部分一致（*github.com/*）にすると notgithub.com や
+    # evil.example.com/github.com/... が github.com のリポジトリとして
+    # 判定され、可視性チェックが fail open してしまう。
+    #
     # 対応形式:
     #   https://github.com/owner/repo(.git)
+    #   ssh://git@github.com:22/owner/repo(.git)
     #   git@github.com:owner/repo(.git)
-    #   ssh://git@github.com/owner/repo(.git)
     local url="$1"
-    url="${url%.git}"
-    url="${url%/}"
-    case "$url" in
-        *github.com:*)  echo "${url##*github.com:}" ;;
-        *github.com/*)  echo "${url##*github.com/}" ;;
-        *)              echo "" ;;
+    local rest host path
+
+    if [ -z "$url" ]; then
+        echo ""
+        return 0
+    fi
+
+    if [ "${url#*://}" != "$url" ]; then
+        # scheme://[user@]host[:port]/path
+        rest="${url#*://}"
+        rest="${rest#*@}"
+        host="${rest%%/*}"
+        host="${host%%:*}"
+        if [ "${rest#*/}" = "$rest" ]; then
+            path=""
+        else
+            path="${rest#*/}"
+        fi
+    elif [ "${url#*:}" != "$url" ]; then
+        # scp 形式: [user@]host:path
+        rest="${url#*@}"
+        host="${rest%%:*}"
+        path="${rest#*:}"
+    else
+        echo ""
+        return 0
+    fi
+
+    host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+    if [ "$host" != "github.com" ]; then
+        echo ""
+        return 0
+    fi
+
+    path="${path#/}"
+    path="${path%/}"
+    path="${path%.git}"
+
+    # GitHub の remote は必ず owner/repo の 2 要素。
+    # 要素数が違うものは解析できていないとみなして中止する。
+    case "$path" in
+        */*/*) echo ""; return 0 ;;
+        */*)   ;;
+        *)     echo ""; return 0 ;;
     esac
+
+    local owner="${path%%/*}"
+    local repo="${path#*/}"
+    if [ -z "$owner" ] || [ -z "$repo" ]; then
+        echo ""
+        return 0
+    fi
+    echo "${owner}/${repo}"
 }
 
 # ---------------------------------------------------------------------------
@@ -120,7 +173,8 @@ info "デプロイ先リモート: $REMOTE ($REMOTE_URL)"
 OWNER_REPO=$(resolve_owner_repo "$REMOTE_URL")
 if [ -z "$OWNER_REPO" ]; then
     error "リモート URL から owner/repo を解決できませんでした: $REMOTE_URL"
-    error "GitHub 以外のホストへのデプロイは可視性を判定できないため中止します。"
+    error "可視性を判定できるのは github.com のリポジトリのみです。"
+    error "判定できないホストへのデプロイは安全のため中止します。"
     exit 1
 fi
 
